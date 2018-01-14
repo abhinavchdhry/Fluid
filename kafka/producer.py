@@ -32,30 +32,33 @@ class Generator(object):
 	def start(self):
 		files = os.listdir(self._filepath)
 		for _f in files:
-			self._processFile(self._filepath + filename)
+			self._processFile(self._filepath + _f)
 
 
 PATH = '../data/'
 TOPICNAME = 'COMMENTS'
 
+### Custom partition function ensures all Reddit comments in the same thread (link_id)
+### is sent to same partition. customKeyFunc(record) returns the least signficant byte of the link_id
+### customPartitionFunc mods it by the number of available partitions to return the key
 def customPartitionFunc(key_bytes, all_partitions, available_partitions):
 	n_partitions = len(available_partitions)
 	try:
 		k = int(key_bytes)
-	exept ValueError:
+	except ValueError:
 		print('WARNING (' + customPartitionFunc.__name__ +  '): could not convert key to int. Defaulting to 0')
 		return 0
 
 	return k%n_partitions
 
 CONFIGS = {
-	'bootstrap_servers': ,
+	'bootstrap_servers': 'localhost:9092',
 	'partitioner': customPartitionFunc
 }
 
 producer = KafkaProducer(**CONFIGS)
 
-## Creates an integer key for every record parsed
+## Returns a key for every record parsed
 def customKeyFunc(record):
 	deserialized = json.loads(record)
 	if 'link_id' in deserialized:
@@ -64,7 +67,7 @@ def customKeyFunc(record):
 	else:
 		k = 0		# Default to 0
 	
-	return k
+	return str(k).encode()
 
 ## Main
 g = Generator(PATH, producer, TOPICNAME, customKeyFunc)
