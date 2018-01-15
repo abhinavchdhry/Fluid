@@ -35,8 +35,9 @@ class Generator(object):
 			self._processFile(self._filepath + _f)
 
 
-PATH = '../data/'
+PATH = '../data/reddit/'
 TOPICNAME = 'COMMENTS'
+TOPICNAME = 'testtopic'
 
 ### Custom partition function ensures all Reddit comments in the same thread (link_id)
 ### is sent to same partition. customKeyFunc(record) returns the least signficant byte of the link_id
