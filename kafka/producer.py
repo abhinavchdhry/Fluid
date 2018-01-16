@@ -36,7 +36,7 @@ class Generator(object):
 
 
 PATH = '../data/reddit/'
-TOPICNAME = 'COMMENTS'
+TOPICNAME = 'COMMENTS11'
 TOPICNAME = 'testtopic'
 
 ### Custom partition function ensures all Reddit comments in the same thread (link_id)
