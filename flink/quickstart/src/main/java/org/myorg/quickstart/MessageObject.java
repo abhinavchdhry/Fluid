@@ -23,17 +23,26 @@ import org.apache.flink.api.java.tuple.Tuple2;
 
 public final class MessageObject {
 
-       public Integer id;
-       public Integer value;
+	public String id;		// ID of the message
+	public String thread_id;	// ID of the thread/link where the message was posted
+	public String author_id;	// ID of the author of the message
 
-       public MessageObject() {};
-       public MessageObject(Integer _id, Integer _value) { id = _id;  value = _value; }
+	public Integer score;		// Score of the comment
+	public String parent_id;	// ID of parent comment/post
+	public String subreddit_id;	// ID of the subreddit
+	public String body;		// Body of the comment
 
-       public String toString()
-       {
-		Tuple2<Integer, Integer> tup = new Tuple2<Integer, Integer>(id, value);
-		return tup.toString();
-       }
+	public MessageObject() {};
+	public MessageObject(String _id, String _thread_id, String _author_id, Integer _score, String _parent_id, String _subreddit_id, String _body) 
+	{ 
+		id = _id;
+		thread_id = _thread_id;
+		author_id = _author_id;
+		score = _score;
+		parent_id = _parent_id;
+		subreddit_id = _subreddit_id;
+		body = _body;
+	}
 
 };
 

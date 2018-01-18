@@ -34,55 +34,30 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import java.util.Properties;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 import org.myorg.quickstart.MessageObject;
+import org.apache.flink.core.fs.FileSystem.WriteMode;
 
-/**
- * Implements the "WordCount" program that computes a simple word occurrence histogram
- * over some sample data
- *
- * <p>
- * This example shows how to:
- * <ul>
- * <li>write a simple Flink program.
- * <li>use Tuple data types.
- * <li>write and use user-defined functions.
- * </ul>
- *
- */
-
+import com.datastax.driver.core.Cluster;
+import com.datastax.driver.core.Session;
+import com.datastax.driver.core.Row;
+import com.datastax.driver.core.ResultSet;
 
 public class MessageStreamProcessor {
 
 	final static String TOPICNAME = "testtopic";
-/*
-	public static class MyReduceFunction implements ReduceFunction<ObjectNode> {
+
+	public final class JsonToMessageObjectMapper implements MapFunction<ObjectNode, MessageObject> {
 		@Override
-		public ObjectNode reduce(ObjectNode n1, ObjectNode n2) throws Exception {
-			return new Tuple2<>(n1.get("key").asInt(), n1.get("value").asInt() + n2.get("value").asInt());
+		public MessageObject map(ObjectNode obj) throws Exception {
+			return new MessageObject(
+				obj.has("id") ? obj.get("id").asText() : "",
+				obj.has("thread_id") ? obj.get("thread_id").asText() : "",
+				obj.has("author_id") ? obj.get("author_id").asText() : "",
+				obj.has("score") ? obj.get("score").asInt() : 0,
+				obj.has("parent_id") ? obj.get("parent_id").asText() : "",
+				obj.has("subreddit_id") ? obj.get("subreddit_id").asText() : "",
+				obj.has("body") ? obj.get("body").asText() : ""
+			);
 		}
-	}
-*/
-/*
-	public final class MessageObject {
-
-        	public Integer id;
-        	public Integer value;
-
-                public MessageObject() {};
-                public MessageObject(Integer _id, Integer _value) { id = _id;  value = _value; }
-
-		public String toString()
-		{
-			Tuple2<Integer, Integer> tup = new Tuple2<Integer, Integer>(id, value);
-			return tup.toString();
-		}
-
-        };
-*/
-	public final class MyMapFunction implements MapFunction<ObjectNode, MessageObject> {
-        	@Override
-        	public MessageObject map(ObjectNode obj) throws Exception {
-                	return new MessageObject(obj.get("key").asInt(), obj.get("value").asInt());
-        	}
 	}
 
 	public final class MessageObjToStringMap implements MapFunction<MessageObject, String> {
@@ -92,10 +67,18 @@ public class MessageStreamProcessor {
 		}
 	}
 
-	public final class MyReduceFunction implements ReduceFunction<MessageObject> {
+	public final class ReduceToWords implements ReduceFunction<MessageObject> {
 		@Override
 		public MessageObject reduce(MessageObject o1, MessageObject o2) throws Exception {
-			return new MessageObject(o1.id, o1.value + o2.value);
+			return new MessageObject(
+				o1.id,
+				o1.thread_id,
+				o1.author_id,
+				o1.score + o2.score,
+				o1.parent_id,
+				o1.subreddit_id,
+				o1.body + o2.body
+			);
 		}
 	}
 
@@ -131,26 +114,31 @@ public class MessageStreamProcessor {
 //		FlinkKafkaConsumer09<ObjectNode> consumer = new FlinkKafkaConsumer09<>(TOPICNAME, new JSONKeyValueDeserializationSchema(false), properties);
 
 		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest21", new JSONDeserializationSchema(), properties));
-		stream.map(new MyMapFunction()).map(new MessageObjToStringMap()).writeAsText("/home/ubuntu/abhinav1.txt").setParallelism(1);
-//.reduce(new MyReduceFunction());
-//.map(new MessageObjToStringMap());
+//		stream.map(new MyMapFunction()).map(new MessageObjToStringMap()).writeAsText("/home/ubuntu/abhinav1.txt").setParallelism(1);
+		stream.map(new JsonToMessageObjectMapper())
+			.keyBy("thread_id")
+			.reduce(new ReduceToWords())
+			.writeAsText("/home/ubuntu/abhinav_words.txt", WriteMode.OVERWRITE)
+			.setParallelism(1);
 
-//		stream.keyBy("key").reduce(
-//			new MyReduceFunction()
-/*			new ReduceFunction<Tuple2<Integer, Integer>>() {
-			
-			public Tuple2<Integer, Integer> reduce(ObjectNode n1, ObjectNode n2) throws Exception {
-				return new Tuple2<>(n1.get("key").asInt(), n1.get("value").asInt() + n2.get("value").asInt());
+		Cluster cluster = null;
+		try {
+			cluster = Cluster.builder()                                                    // (1)
+            		.addContactPoint("localhost")
+            			.build();
+			if (cluster == null) {
+				System.out.println("Cluster is null");
 			}
+			Session session = cluster.connect();                                           // (2)
+			ResultSet rs = session.execute("select release_version from system.local");    // (3)
+			Row row = rs.one();
+			System.out.println(row.getString("release_version"));                          // (4)
+		} catch (Exception e) {
+			System.out.println("OOPS!");
+		} finally {
+			if (cluster != null) cluster.close();                                          // (5)
 		}
-*/
-//		).print();
 
-/*		FlinkKafkaProducer09<String> myProducer = new FlinkKafkaProducer09<String>(
-        			"localhost:9092",            // broker list
-        			"my-topic",                  // target topic
-			        new SimpleStringSchema());   // serialization schema
-*/
 		// versions 0.10+ allow attaching the records' event timestamp when writing them to Kafka;
 		// this method is not available for earlier Kafka versions
 //		myProducer.setWriteTimestampToKafka(true);

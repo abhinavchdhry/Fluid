@@ -132,6 +132,11 @@ under the License.
 			<artifactId>log4j</artifactId>
 			<version>${log4j.version}</version>
 		</dependency>
+		<dependency>
+			<groupId>com.datastax.cassandra</groupId>
+			<artifactId>cassandra-driver-core</artifactId>
+			<version>3.3.0</version>
+		</dependency>
 	</dependencies>
 
 	<profiles>
@@ -295,6 +300,21 @@ under the License.
 									<exclude>commons-cli:commons-cli</exclude>
 								</excludes>
 							</artifactSet>
+        <relocations>
+            <relocation>
+                <pattern>com.google</pattern>
+                <shadedPattern>shaded.guava</shadedPattern>
+                <includes>
+                    <include>com.google.**</include>
+                </includes>
+
+                <excludes>
+                    <exclude>com.google.common.base.Optional</exclude>
+                    <exclude>com.google.common.base.Absent</exclude>
+                    <exclude>com.google.common.base.Present</exclude>
+                </excludes>
+            </relocation>
+        </relocations>
 							<filters>
 								<filter>
 									<artifact>org.apache.flink:*</artifact>
