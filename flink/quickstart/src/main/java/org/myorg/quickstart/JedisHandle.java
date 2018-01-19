@@ -11,7 +11,7 @@ public class JedisHandle {
 	public static JedisHandle getInstance() {
 		if (jedis == null) {
 			jedis_handle = new JedisHandle();
-			jedis = new Jedis("localhost");
+			jedis = new Jedis("10.0.0.10", 6379);
 		}
 		return jedis_handle;
 	}

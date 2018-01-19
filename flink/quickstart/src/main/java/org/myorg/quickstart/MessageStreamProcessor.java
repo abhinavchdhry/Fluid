@@ -54,6 +54,8 @@ import org.myorg.quickstart.MessageObject;
 import org.myorg.quickstart.JedisHandle;
 import org.myorg.quickstart.CassandraSession;
 
+import info.debatty.java.stringsimilarity.Cosine;
+
 public class MessageStreamProcessor {
 
 	final static String TOPICNAME = "testtopic";
@@ -121,16 +123,33 @@ public class MessageStreamProcessor {
 			DataSet<Tuple2<String, String>> obj_dataset = obj.toDataSet();
 			DataSet<Tuple4<String, String, String, String>> adsData = CassandraSession.getInstance().getData();
 
-//			adsData.crossWithTiny(obj_dataset);
+			adsData.crossWithTiny(obj_dataset).map(
+				new MapFunction<Tuple2<Tuple4<String, String, String, String>, Tuple2<String, String>>, Tuple2<String, Double>>() {
+					@Override
+					public Tuple2<String, Double> map(Tuple2<Tuple4<String, String, String, String>, Tuple2<String, String>> in) throws Exception {
+						String ad_id = in.f0.f0;
+						String ad_title = in.f0.f1;
+						String ad_body = in.f0.f2;
+						String ad_tags = in.f0.f3;
 
-/*			if (jedis.hexists("THREAD_HASHMAP", thread_id)) {
+						String comment_text = in.f1.f1;
+
+						Cosine cosine = new Cosine(1);
+						Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, comment_text);
+
+						return new Tuple2<>(ad_id, similarity);
+					}
+				}
+			);
+
+			if (jedis.hexists("THREAD_HASHMAP", thread_id)) {
 				String currentThreadTableKey = jedis.hget("THREAD_HASHMAP", thread_id);
 				
 			}
 			else {
 				System.out.println("THREAD_HASHMAP does not exist!");
 			}
-*/
+
 		}
 	}
 
