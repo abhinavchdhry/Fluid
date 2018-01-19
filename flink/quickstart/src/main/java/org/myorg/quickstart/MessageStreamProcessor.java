@@ -18,12 +18,16 @@ package org.myorg.quickstart;
  * limitations under the License.
  */
 
+import java.util.Properties;
+
+// FLink libs
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.util.Collector;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer09;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer09;
@@ -31,15 +35,24 @@ import org.apache.flink.streaming.util.serialization.JSONDeserializationSchema;
 import org.apache.flink.streaming.util.serialization.JsonRowSerializationSchema;
 import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import java.util.Properties;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
-import org.myorg.quickstart.MessageObject;
 import org.apache.flink.core.fs.FileSystem.WriteMode;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.streaming.api.functions.ProcessFunction.Context;
 
+// Cassandra driver libs
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.Row;
 import com.datastax.driver.core.ResultSet;
+
+// Redis client libs
+import redis.clients.jedis.Jedis;
+
+// Local project libs
+import org.myorg.quickstart.MessageObject;
+import org.myorg.quickstart.JedisHandle;
+import org.myorg.quickstart.CassandraSession;
 
 public class MessageStreamProcessor {
 
@@ -97,6 +110,30 @@ public class MessageStreamProcessor {
 		return (consumers);
 	}
 
+	public class MessageProcessor extends ProcessFunction<MessageObject, MessageObject> {
+		@Override
+    		public void processElement(MessageObject obj, Context ctx, Collector<MessageObject> out)
+            		throws Exception 
+		{
+			String thread_id = obj.thread_id;
+			Jedis jedis = JedisHandle.getInstance().getHandle();
+
+			DataSet<Tuple2<String, String>> obj_dataset = obj.toDataSet();
+			DataSet<Tuple4<String, String, String, String>> adsData = CassandraSession.getInstance().getData();
+
+//			adsData.crossWithTiny(obj_dataset);
+
+/*			if (jedis.hexists("THREAD_HASHMAP", thread_id)) {
+				String currentThreadTableKey = jedis.hget("THREAD_HASHMAP", thread_id);
+				
+			}
+			else {
+				System.out.println("THREAD_HASHMAP does not exist!");
+			}
+*/
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		new MessageStreamProcessor().start();
 	}
@@ -114,30 +151,12 @@ public class MessageStreamProcessor {
 //		FlinkKafkaConsumer09<ObjectNode> consumer = new FlinkKafkaConsumer09<>(TOPICNAME, new JSONKeyValueDeserializationSchema(false), properties);
 
 		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest21", new JSONDeserializationSchema(), properties));
-//		stream.map(new MyMapFunction()).map(new MessageObjToStringMap()).writeAsText("/home/ubuntu/abhinav1.txt").setParallelism(1);
 		stream.map(new JsonToMessageObjectMapper())
 			.keyBy("thread_id")
-			.reduce(new ReduceToWords())
-			.writeAsText("/home/ubuntu/abhinav_words.txt", WriteMode.OVERWRITE)
-			.setParallelism(1);
-
-		Cluster cluster = null;
-		try {
-			cluster = Cluster.builder()                                                    // (1)
-            		.addContactPoint("localhost")
-            			.build();
-			if (cluster == null) {
-				System.out.println("Cluster is null");
-			}
-			Session session = cluster.connect();                                           // (2)
-			ResultSet rs = session.execute("select release_version from system.local");    // (3)
-			Row row = rs.one();
-			System.out.println(row.getString("release_version"));                          // (4)
-		} catch (Exception e) {
-			System.out.println("OOPS!");
-		} finally {
-			if (cluster != null) cluster.close();                                          // (5)
-		}
+			.process(new MessageProcessor());
+//			.reduce(new ReduceToWords())
+//			.writeAsText("/home/ubuntu/abhinav_words.txt", WriteMode.OVERWRITE)
+//			.setParallelism(1);
 
 		// versions 0.10+ allow attaching the records' event timestamp when writing them to Kafka;
 		// this method is not available for earlier Kafka versions
@@ -148,30 +167,5 @@ public class MessageStreamProcessor {
 
 		env.execute("Stream processor");
 
-	}
-
-	//
-	// 	User Functions
-	//
-
-	/**
-	 * Implements the string tokenizer that splits sentences into words as a user-defined
-	 * FlatMapFunction. The function takes a line (String) and splits it into
-	 * multiple pairs in the form of "(word,1)" (Tuple2<String, Integer>).
-	 */
-	public static final class LineSplitter implements FlatMapFunction<String, Tuple2<String, Integer>> {
-
-		@Override
-		public void flatMap(String value, Collector<Tuple2<String, Integer>> out) {
-			// normalize and split the line
-			String[] tokens = value.toLowerCase().split("\\W+");
-
-			// emit the pairs
-			for (String token : tokens) {
-				if (token.length() > 0) {
-					out.collect(new Tuple2<String, Integer>(token, 1));
-				}
-			}
-		}
 	}
 }

@@ -18,6 +18,9 @@
 
 package org.myorg.quickstart;
 
+import org.apache.flink.api.java.ExecutionEnvironment;
+import org.apache.flink.api.java.DataSet;
+
 import java.util.*;
 import org.apache.flink.api.java.tuple.Tuple2;
 
@@ -44,5 +47,12 @@ public final class MessageObject {
 		body = _body;
 	}
 
+	public DataSet<Tuple2<String, String>> toDataSet() {
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+		Tuple2<String, String> tuple = new Tuple2<>(id, body);
+		DataSet<Tuple2<String, String>> dataSet = env.fromElements(tuple);
+		return dataSet;
+	}
 };
 
