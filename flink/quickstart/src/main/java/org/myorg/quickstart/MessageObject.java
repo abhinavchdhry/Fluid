@@ -23,6 +23,7 @@ import org.apache.flink.api.java.DataSet;
 
 import java.util.*;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.tuple.Tuple3;
 
 public final class MessageObject {
 
@@ -50,8 +51,8 @@ public final class MessageObject {
 	public DataSet<Tuple2<String, String>> toDataSet() {
 		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
-		Tuple2<String, String> tuple = new Tuple2<>(id, body);
-		DataSet<Tuple2<String, String>> dataSet = env.fromElements(tuple);
+		Tuple3<String, String, String> tuple = new Tuple3<>(id, thread_id, body);
+		DataSet<Tuple3<String, String, String>> dataSet = env.fromElements(tuple);
 		return dataSet;
 	}
 };
