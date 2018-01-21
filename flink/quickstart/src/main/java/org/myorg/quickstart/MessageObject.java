@@ -48,7 +48,7 @@ public final class MessageObject {
 		body = _body;
 	}
 
-	public DataSet<Tuple2<String, String>> toDataSet() {
+	public DataSet<Tuple3<String, String, String>> toDataSet() {
 		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
 		Tuple3<String, String, String> tuple = new Tuple3<>(id, thread_id, body);

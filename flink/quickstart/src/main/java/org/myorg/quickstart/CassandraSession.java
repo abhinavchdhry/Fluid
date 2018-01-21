@@ -59,14 +59,14 @@ public class CassandraSession {
 		if (data == null) {
 			final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
-			final String SELECT_QUERY = "SELECT id, title, body, tags FROM ADS_KEYSPACE.ads_table;";
+			final String SELECT_QUERY = "SELECT id, title, body, tags FROM ads.ads_table;";
 
 			data = env.createInput(
 				new CassandraInputFormat<Tuple4<String, String, String, String>>(
 					SELECT_QUERY, new ClusterBuilder() {
 						@Override
 						protected Cluster buildCluster(Builder builder) {
-							return builder.addContactPoints("localhost").build();
+							return builder.addContactPoints("127.0.0.1").build();
 						}
 					}
 				), TupleTypeInfo.of(new TypeHint<Tuple4<String, String, String, String>>() {} )
