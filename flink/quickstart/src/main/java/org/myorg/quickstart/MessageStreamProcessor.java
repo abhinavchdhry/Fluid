@@ -181,6 +181,89 @@ public class MessageStreamProcessor {
 		}
 	}
 
+	public class SimilarityCalculatorMap implements MapFunction<Tuple7<String, String, String, String, String, String, String>>() {
+		@Override
+		public Tuple3<String, String, Double> map(Tuple7<String, String, String, String, String, String, String> in) throws Exception {
+
+			String comment_thread_id = in.f0;
+			String comment_text = in.f1;
+
+			String ad_id = in.f2;
+			String ad_title = in.f3;
+			String ad_body = in.f4;
+			String ad_tags = in.f5;
+
+			Cosine cosine = new Cosine(1);
+			Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, comment_text);
+			Double overall_ad_similarity = new Double(-1.0);
+
+			Jedis jedis = JedisHandle.getInstance().getHandle();
+
+			// Retrieve context and push updated context to Jedis
+			if (jedis.exists("THREAD_MAP") && jedis.hexists("THREAD_MAP", comment_thread_id)) {
+				String cur_thread_map = jedis.hget("THREAD_MAP", comment_thread_id);
+
+				if (jedis.exists(cur_thread_map)) {
+					if (jedis.hexists(cur_thread_map, ad_id)) {
+						String thread_ad_mapped_obj = jedis.hget(cur_thread_map, ad_id);
+
+						if (jedis.exists(thread_ad_mapped_obj)) {
+							if (jedis.hexists(thread_ad_mapped_obj, "Total_score") && jedis.hexists(thread_ad_mapped_obj, "Count")) {
+								Double score = Double.parseDouble(jedis.hget(thread_ad_mapped_obj, "Total_score"));
+								Integer count = Integer.parseInt(jedis.hget(thread_ad_mapped_obj, "Count"));
+
+								count += 1;
+								score += similarity;
+
+								overall_ad_similarity = score/count.doubleValue();
+
+								jedis.hset(thread_ad_mapped_obj, "Total_score", score.toString());
+								jedis.hset(thread_ad_mapped_obj, "Count", count.toString());
+							}
+							else {
+								System.out.println("JEDIS_OBJECT_CORRUPT1: Corrupt thread_ad_mapped_obj: either total_score or count field missing!");
+							}
+						}
+						else {
+							System.out.println("JEDIS_OBJECT_NOT_FOUND2: thread_ad_mapped_obj not found!");
+						}
+					}
+					else {	// Current thread does not contain ad_id. Make an entry
+						// Create the thread-ad map object
+                                                String object_name = comment_thread_id + "_" + ad_id + "_object";
+
+	                                        jedis.hset(object_name, "Total_score", similarity.toString());
+        		                        jedis.hset(object_name, "Count", "1");
+						
+						// Insert the thread_map object
+						jedis.hset(cur_thread_map, ad_id, object_name);
+					}
+                                }
+                                else {	// Non null ID present but object does not exist!!
+					System.out.println("JEDIS_OBJECT_NOT_FOUND1: THREAD_MAP referenced a non-null object but the object was not found!");
+                                }
+			}
+			else {	// Create a THREAD_MAP, if exists also create the thread id map
+				
+				// Create the thread-ad map object
+				String object_name = comment_thread_id + "_" + ad_id + "_object";
+
+				jedis.hset(object_name, "Total_score", similarity.toString());
+				jedis.hset(object_name, "Count", "1");
+
+				// Create the thread map object
+				String thread_map_object = comment_thread_id + "_object";
+	
+				jedis.hset(thread_map_object, ad_id, object_name);
+
+				// Create the final THREAD_MAP hashmap
+				jedis.hset("THREAD_MAP", comment_thread_id, thread_map_object);
+			}
+
+			return new Tuple3<>(comment_thread_id, ad_id, overall_ad_similarity);
+		}
+	}
+
 	public class MessageProcessor extends ProcessFunction<MessageObject, Tuple3<String, String, String>> {
 		@Override
     		public void processElement(MessageObject obj, Context ctx, Collector<Tuple3<String, String, String>> out)
@@ -198,87 +281,6 @@ public class MessageStreamProcessor {
 /*
 .map(
 
-				new MapFunction<Tuple2<Tuple4<String, String, String, String>, Tuple3<String, String, String>>, Tuple3<String, String, Double>>() {
-					@Override
-					public Tuple3<String, String, Double> map(Tuple2<Tuple4<String, String, String, String>, Tuple3<String, String, String>> in) throws Exception {
-						String ad_id = in.f0.f0;
-						String ad_title = in.f0.f1;
-						String ad_body = in.f0.f2;
-						String ad_tags = in.f0.f3;
-
-						String comment_thread_id = in.f1.f1;
-						String comment_text = in.f1.f2;
-
-						Cosine cosine = new Cosine(1);
-						Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, comment_text);
-						Double overall_ad_similarity = new Double(-1.0);
-
-						Jedis jedis = JedisHandle.getInstance().getHandle();
-
-						// Retrieve context and push updated context to Jedis
-						if (jedis.exists("THREAD_MAP") && jedis.hexists("THREAD_MAP", comment_thread_id)) {
-							String cur_thread_map = jedis.hget("THREAD_MAP", comment_thread_id);
-
-							if (jedis.exists(cur_thread_map)) {
-								if (jedis.hexists(cur_thread_map, ad_id)) {
-									String thread_ad_mapped_obj = jedis.hget(cur_thread_map, ad_id);
-
-									if (jedis.exists(thread_ad_mapped_obj)) {
-										if (jedis.hexists(thread_ad_mapped_obj, "Total_score") && jedis.hexists(thread_ad_mapped_obj, "Count")) {
-											Double score = Double.parseDouble(jedis.hget(thread_ad_mapped_obj, "Total_score"));
-											Integer count = Integer.parseInt(jedis.hget(thread_ad_mapped_obj, "Count"));
-
-											count += 1;
-											score += similarity;
-
-											overall_ad_similarity = score/count.doubleValue();
-
-											jedis.hset(thread_ad_mapped_obj, "Total_score", score.toString());
-											jedis.hset(thread_ad_mapped_obj, "Count", count.toString());
-										}
-										else {
-											System.out.println("JEDIS_OBJECT_CORRUPT1: Corrupt thread_ad_mapped_obj: either total_score or count field missing!");
-										}
-									}
-									else {
-										System.out.println("JEDIS_OBJECT_NOT_FOUND2: thread_ad_mapped_obj not found!");
-									}
-								}
-								else {	// Current thread does not contain ad_id. Make an entry
-									// Create the thread-ad map object
-		                                                        String object_name = comment_thread_id + "_" + ad_id + "_object";
-
-                		                                        jedis.hset(object_name, "Total_score", similarity.toString());
-                                		                        jedis.hset(object_name, "Count", "1");
-									
-									// Insert the thread_map object
-									jedis.hset(cur_thread_map, ad_id, object_name);
-								}
-                                                        }
-   	                                                else {	// Non null ID present but object does not exist!!
-								System.out.println("JEDIS_OBJECT_NOT_FOUND1: THREAD_MAP referenced a non-null object but the object was not found!");
-                                                        }
-						}
-						else {	// Create a THREAD_MAP, if exists also create the thread id map
-							
-							// Create the thread-ad map object
-							String object_name = comment_thread_id + "_" + ad_id + "_object";
-
-							jedis.hset(object_name, "Total_score", similarity.toString());
-							jedis.hset(object_name, "Count", "1");
-
-							// Create the thread map object
-							String thread_map_object = comment_thread_id + "_object";
-				
-							jedis.hset(thread_map_object, ad_id, object_name);
-
-							// Create the final THREAD_MAP hashmap
-							jedis.hset("THREAD_MAP", comment_thread_id, thread_map_object);
-						}
-
-						return new Tuple3<>(comment_thread_id, ad_id, overall_ad_similarity);
-					}
-				}
 			
 			).maxBy(2).writeAsText("~/flink_output.txt", WriteMode.OVERWRITE).setParallelism(1);
 */
