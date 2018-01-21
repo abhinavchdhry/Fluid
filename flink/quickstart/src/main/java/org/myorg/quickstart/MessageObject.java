@@ -55,5 +55,13 @@ public final class MessageObject {
 		DataSet<Tuple3<String, String, String>> dataSet = env.fromElements(tuple);
 		return dataSet;
 	}
+
+	public Tuple3<String, String, String> toTuple() {
+		return new Tuple3<String, String, String>(id, thread_id, body);
+	}
+
+	public String toString() {
+		return new String(id + ", " + thread_id + ", " + body);
+	}
 };
 

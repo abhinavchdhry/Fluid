@@ -30,6 +30,7 @@ import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple4;
+import org.apache.flink.api.java.tuple.Tuple7;
 import org.apache.flink.util.Collector;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer09;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer09;
@@ -41,6 +42,7 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.Obje
 import org.apache.flink.core.fs.FileSystem.WriteMode;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.ProcessFunction.Context;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 
 // Cassandra driver libs
 import com.datastax.driver.core.Cluster;
@@ -65,6 +67,9 @@ import org.myorg.quickstart.JedisHandle;
 import org.myorg.quickstart.CassandraSession;
 
 import info.debatty.java.stringsimilarity.Cosine;
+import java.util.ArrayList;
+import java.lang.Long;
+import java.lang.Integer;
 
 public class MessageStreamProcessor {
 
@@ -75,7 +80,7 @@ public class MessageStreamProcessor {
 		public MessageObject map(ObjectNode obj) throws Exception {
 			return new MessageObject(
 				obj.has("id") ? obj.get("id").asText() : "",
-				obj.has("thread_id") ? obj.get("thread_id").asText() : "",
+				obj.has("link_id") ? obj.get("link_id").asText() : "",
 				obj.has("author_id") ? obj.get("author_id").asText() : "",
 				obj.has("score") ? obj.get("score").asInt() : 0,
 				obj.has("parent_id") ? obj.get("parent_id").asText() : "",
@@ -122,17 +127,76 @@ public class MessageStreamProcessor {
 		return (consumers);
 	}
 
-	public class MessageProcessor extends ProcessFunction<MessageObject, MessageObject> {
+	/*
+		Output tuples have format:
+		1	Comment ID
+		2	Thread ID
+		3	Comment Body
+		4	Ad ID
+		5	Ad title
+		6	Ad body
+		7	Ad tags
+	*/
+	public class MessageAdProcessor implements FlatMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple7<String, String, String, String, String, String, String>> {
 		@Override
-    		public void processElement(MessageObject obj, Context ctx, Collector<MessageObject> out)
+		public void flatMap(Tuple7<String, String, String, String, String, String, String> in, Collector<Tuple7<String, String, String, String, String, String, String>> out) throws Exception {
+//			ArrayList<Tuple4<String, String, String, String>> data = CassandraSession.getInstance().getDataAsArray();
+			Jedis jedis = JedisHandle.getInstance().getHandle();
+
+			if (jedis.exists("REDIS_ADS_TABLE")) {
+				Long len = jedis.llen("REDIS_ADS_TABLE");
+				for (Long i = new Long(0); i < len; i++) {
+					String ad_id = jedis.lindex("REDIS_ADS_TABLE", i);
+					
+					if (jedis.exists(ad_id) && jedis.llen(ad_id) == new Integer(3).longValue()) {
+						String ad_title = jedis.lindex(ad_id, new Integer(0).longValue());
+						String ad_body = jedis.lindex(ad_id, new Integer(1).longValue());
+						String ad_tags = jedis.lindex(ad_id, new Integer(2).longValue());
+
+						out.collect(
+							new Tuple7<>(in.f0, in.f1, in.f2, ad_id, ad_title, ad_body, ad_tags)
+						);
+					}
+					else {
+						System.out.println("Ad Object referenced does not exist or is not of appropriate length!!");
+					}
+				}
+			}
+			else {
+				System.out.println("REDIS_ADS_TABLE not found!!");
+			}
+
+//			for (Tuple4<String, String, String, String> tuple : data) {
+//				out.collect(
+//					new Tuple7<>(in.f0, in.f1, in.f2, tuple.f0, tuple.f1, tuple.f2, tuple.f3)
+//				);
+//			}
+		}
+	}
+
+	public class MessageToDummyTuple7Map implements MapFunction<MessageObject, Tuple7<String, String, String, String, String, String, String>> {
+		@Override
+		public Tuple7<String, String, String, String, String, String, String> map(MessageObject obj) {
+			return new Tuple7<>(obj.id, obj.thread_id, obj.body, "", "", "", "");
+		}
+	}
+
+	public class MessageProcessor extends ProcessFunction<MessageObject, Tuple3<String, String, String>> {
+		@Override
+    		public void processElement(MessageObject obj, Context ctx, Collector<Tuple3<String, String, String>> out)
             		throws Exception 
 		{
 			String thread_id = obj.thread_id;
 
 			DataSet<Tuple3<String, String, String>> obj_dataset = obj.toDataSet();
 			DataSet<Tuple4<String, String, String, String>> adsData = CassandraSession.getInstance().getData();
+			
+//			out.collect(obj_dataset);
 
-			adsData.crossWithTiny(obj_dataset).map(
+//			try {
+//			adsData.crossWithTiny(obj_dataset).writeAsText("~/test_flink_out.txt", WriteMode.OVERWRITE).setParallelism(1);
+/*
+.map(
 
 				new MapFunction<Tuple2<Tuple4<String, String, String, String>, Tuple3<String, String, String>>, Tuple3<String, String, Double>>() {
 					@Override
@@ -217,7 +281,11 @@ public class MessageStreamProcessor {
 				}
 			
 			).maxBy(2).writeAsText("~/flink_output.txt", WriteMode.OVERWRITE).setParallelism(1);
-
+*/
+//			}
+//			catch (Exception e) {
+//				System.out.println("Caught! :" + e);
+//			}
 		}
 	}
 
@@ -231,26 +299,25 @@ public class MessageStreamProcessor {
 
 //		FlinkKafkaConsumer09[] consumers = getConsumerGroup(3, "consumergroup1");
                 Properties properties = new Properties();
-                properties.setProperty("bootstrap.servers", "localhost:9092");
-                properties.setProperty("zookeeper.connect", "localhost:2181");
-                properties.setProperty("group.id", "consumergroup1");
+                properties.setProperty("bootstrap.servers", "127.0.0.1:9092");
+                properties.setProperty("zookeeper.connect", "127.0.0.1:2181");
+                properties.setProperty("group.id", "consumergroup3");
 
 //		FlinkKafkaConsumer09<ObjectNode> consumer = new FlinkKafkaConsumer09<>(TOPICNAME, new JSONKeyValueDeserializationSchema(false), properties);
 
 		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest21", new JSONDeserializationSchema(), properties));
 		stream.map(new JsonToMessageObjectMapper())
 			.keyBy("thread_id")
-			.process(new MessageProcessor());
+			.map(new MessageToDummyTuple7Map())	//.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
+			.flatMap(new MessageAdProcessor()).writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
 //			.reduce(new ReduceToWords())
 //			.writeAsText("/home/ubuntu/abhinav_words.txt", WriteMode.OVERWRITE)
 //			.setParallelism(1);
 
+
 		// versions 0.10+ allow attaching the records' event timestamp when writing them to Kafka;
 		// this method is not available for earlier Kafka versions
 //		myProducer.setWriteTimestampToKafka(true);
-
-//		stream.addSink(myProducer);
-
 
 		env.execute("Stream processor");
 
