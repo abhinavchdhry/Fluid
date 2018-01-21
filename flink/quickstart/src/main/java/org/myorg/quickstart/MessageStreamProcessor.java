@@ -127,6 +127,16 @@ public class MessageStreamProcessor {
 		return (consumers);
 	}
 
+	final String ADS_TABLE_KEY_PREFIX = "AD_KEY_PREFIX_";
+	final String ADS_TABLE = "REDIS_ADS_TABLE";
+
+	final String THREAD_MAP_OBJ = "THREAD_MAP";
+	final String THREAD_KEY_PREFIX = "THREAD_ID_KEY_";
+	final String THREAD_VAL_PREFIX = "THREAD_VAL_KEY_";
+	final String AD_KEY_PREFIX = "AD_ID_KEY_";
+	final String SCORE_FIELD = "TOTAL_SCORE";
+	final String COUNT_FIELD = "TOTAL_COUNT";
+
 	/*
 		Output tuples have format:
 		1	Comment ID
@@ -140,23 +150,28 @@ public class MessageStreamProcessor {
 	public class MessageAdProcessor implements MapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple3<String, String, Double>> {
 		@Override
 		public Tuple3<String, String, Double> map(Tuple7<String, String, String, String, String, String, String> in) throws Exception {
-//			ArrayList<Tuple4<String, String, String, String>> data = CassandraSession.getInstance().getDataAsArray();
 			Jedis jedis = JedisHandle.getInstance().getHandle();
 
 			Double highest_score = new Double(-1);
 			String best_ad_id = "";
 
-			if (jedis.exists("REDIS_ADS_TABLE")) {
-				Long len = jedis.llen("REDIS_ADS_TABLE");
+			if (jedis.exists(ADS_TABLE)) {
+				Long len = jedis.llen(ADS_TABLE);
 
 				// Loop
 				for (Long i = new Long(0); i < len; i++) {
-					String ad_id = jedis.lindex("REDIS_ADS_TABLE", i);
-					
-					if (jedis.exists(ad_id) && jedis.llen(ad_id) == new Integer(3).longValue()) {
-						String ad_title = jedis.lindex(ad_id, new Integer(0).longValue());
-						String ad_body = jedis.lindex(ad_id, new Integer(1).longValue());
-						String ad_tags = jedis.lindex(ad_id, new Integer(2).longValue());
+					String ad_obj_key = jedis.lindex(ADS_TABLE, i);
+
+					if (!ad_obj_key.startsWith(ADS_TABLE_KEY_PREFIX)) {
+						System.out.println("AD object prefix is not valid!!!");
+					}
+
+					String ad_id = ad_obj_key.substring(ADS_TABLE_KEY_PREFIX.length()-1);
+
+					if (jedis.exists(ad_obj_key) && jedis.llen(ad_obj_key) == new Integer(3).longValue()) {
+						String ad_title = jedis.lindex(ad_obj_key, new Integer(0).longValue());
+						String ad_body = jedis.lindex(ad_obj_key, new Integer(1).longValue());
+						String ad_tags = jedis.lindex(ad_obj_key, new Integer(2).longValue());
 
 						String comment_id = in.f0;
 						String comment_thread_id = in.f1;
@@ -164,30 +179,29 @@ public class MessageStreamProcessor {
 
 						Cosine cosine = new Cosine(1);
 						Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, comment_text);
-						Double overall_ad_similarity = new Double(-1.0);
-
-						Jedis jedis = JedisHandle.getInstance().getHandle();
+						Double overall_ad_similarity = similarity;
 
 						// Retrieve context and push updated context to Jedis
-						if (jedis.exists("THREAD_MAP") && jedis.hexists("THREAD_MAP", comment_thread_id)) {
-							String cur_thread_map = jedis.hget("THREAD_MAP", comment_thread_id);
+						if (jedis.exists(THREAD_MAP_OBJ) && jedis.hexists(THREAD_MAP_OBJ, THREAD_KEY_PREFIX + comment_thread_id)) {
+
+							String cur_thread_map = jedis.hget(THREAD_MAP_OBJ, THREAD_KEY_PREFIX + comment_thread_id);
 
 							if (jedis.exists(cur_thread_map)) {
-								if (jedis.hexists(cur_thread_map, ad_id)) {
-									String thread_ad_mapped_obj = jedis.hget(cur_thread_map, ad_id);
+								if (jedis.hexists(cur_thread_map, AD_KEY_PREFIX + ad_id)) {
+									String thread_ad_mapped_obj = jedis.hget(cur_thread_map, AD_KEY_PREFIX + ad_id);
 
 									if (jedis.exists(thread_ad_mapped_obj)) {
-										if (jedis.hexists(thread_ad_mapped_obj, "Total_score") && jedis.hexists(thread_ad_mapped_obj, "Count")) {
-											Double score = Double.parseDouble(jedis.hget(thread_ad_mapped_obj, "Total_score"));
-											Integer count = Integer.parseInt(jedis.hget(thread_ad_mapped_obj, "Count"));
+										if (jedis.hexists(thread_ad_mapped_obj, SCORE_FIELD) && jedis.hexists(thread_ad_mapped_obj, COUNT_FIELD)) {
+											Double score = Double.parseDouble(jedis.hget(thread_ad_mapped_obj, SCORE_FIELD));
+											Integer count = Integer.parseInt(jedis.hget(thread_ad_mapped_obj, COUNT_FIELD));
 
 											count += 1;
 											score += similarity;
 
 											overall_ad_similarity = score/count.doubleValue();
 
-											jedis.hset(thread_ad_mapped_obj, "Total_score", score.toString());
-											jedis.hset(thread_ad_mapped_obj, "Count", count.toString());
+											jedis.hset(thread_ad_mapped_obj, SCORE_FIELD, score.toString());
+											jedis.hset(thread_ad_mapped_obj, COUNT_FIELD, count.toString());
 										}
 										else {
 											System.out.println("JEDIS_OBJECT_CORRUPT1: Corrupt thread_ad_mapped_obj: either total_score or count field missing!");
@@ -199,13 +213,13 @@ public class MessageStreamProcessor {
 								}
 								else {	// Current thread does not contain ad_id. Make an entry
 									// Create the thread-ad map object
-						                        String object_name = comment_thread_id + "_" + ad_id + "_object";
+						                        String object_name = comment_thread_id + "_" + ad_id + "_OBJ";
 
-							                jedis.hset(object_name, "Total_score", similarity.toString());
-								        jedis.hset(object_name, "Count", "1");
+							                jedis.hset(object_name, SCORE_FIELD, similarity.toString());
+								        jedis.hset(object_name, COUNT_FIELD, "1");
 						
 									// Insert the thread_map object
-									jedis.hset(cur_thread_map, ad_id, object_name);
+									jedis.hset(cur_thread_map, AD_KEY_PREFIX + ad_id, object_name);
 								}
 						        }
 						        else {	// Non null ID present but object does not exist!!
@@ -215,18 +229,18 @@ public class MessageStreamProcessor {
 						else {	// Create a THREAD_MAP, if exists also create the thread id map
 				
 							// Create the thread-ad map object
-							String object_name = comment_thread_id + "_" + ad_id + "_object";
+							String object_name = comment_thread_id + "_" + ad_id + "_OBJ";
 
-							jedis.hset(object_name, "Total_score", similarity.toString());
-							jedis.hset(object_name, "Count", "1");
+							jedis.hset(object_name, SCORE_FIELD, similarity.toString());
+							jedis.hset(object_name, COUNT_FIELD, "1");
 
 							// Create the thread map object
-							String thread_map_object = comment_thread_id + "_object";
+							String thread_map_object = THREAD_VAL_PREFIX + comment_thread_id;
 	
-							jedis.hset(thread_map_object, ad_id, object_name);
+							jedis.hset(thread_map_object, AD_KEY_PREFIX + ad_id, object_name);
 
 							// Create the final THREAD_MAP hashmap
-							jedis.hset("THREAD_MAP", comment_thread_id, thread_map_object);
+							jedis.hset(THREAD_MAP_OBJ, THREAD_KEY_PREFIX + comment_thread_id, thread_map_object);
 						}
 
 						if (overall_ad_similarity > highest_score) {
@@ -234,9 +248,6 @@ public class MessageStreamProcessor {
 							best_ad_id = ad_id;
 						}
 
-//						out.collect(
-//							new Tuple7<>(in.f0, in.f1, in.f2, ad_id, ad_title, ad_body, ad_tags)
-//						);
 					}
 					else {
 						System.out.println("Ad Object referenced does not exist or is not of appropriate length!!");
