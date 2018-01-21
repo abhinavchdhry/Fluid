@@ -166,11 +166,6 @@ public class MessageStreamProcessor {
 				System.out.println("REDIS_ADS_TABLE not found!!");
 			}
 
-//			for (Tuple4<String, String, String, String> tuple : data) {
-//				out.collect(
-//					new Tuple7<>(in.f0, in.f1, in.f2, tuple.f0, tuple.f1, tuple.f2, tuple.f3)
-//				);
-//			}
 		}
 	}
 
@@ -181,17 +176,18 @@ public class MessageStreamProcessor {
 		}
 	}
 
-	public class SimilarityCalculatorMap implements MapFunction<Tuple7<String, String, String, String, String, String, String>>() {
+	public class SimilarityCalculatorMap implements MapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple3<String, String, Double>> {
 		@Override
 		public Tuple3<String, String, Double> map(Tuple7<String, String, String, String, String, String, String> in) throws Exception {
 
-			String comment_thread_id = in.f0;
-			String comment_text = in.f1;
+			String comment_id = in.f0;
+			String comment_thread_id = in.f1;
+			String comment_text = in.f2;
 
-			String ad_id = in.f2;
-			String ad_title = in.f3;
-			String ad_body = in.f4;
-			String ad_tags = in.f5;
+			String ad_id = in.f3;
+			String ad_title = in.f4;
+			String ad_body = in.f5;
+			String ad_tags = in.f6;
 
 			Cosine cosine = new Cosine(1);
 			Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, comment_text);
@@ -264,33 +260,6 @@ public class MessageStreamProcessor {
 		}
 	}
 
-	public class MessageProcessor extends ProcessFunction<MessageObject, Tuple3<String, String, String>> {
-		@Override
-    		public void processElement(MessageObject obj, Context ctx, Collector<Tuple3<String, String, String>> out)
-            		throws Exception 
-		{
-			String thread_id = obj.thread_id;
-
-			DataSet<Tuple3<String, String, String>> obj_dataset = obj.toDataSet();
-			DataSet<Tuple4<String, String, String, String>> adsData = CassandraSession.getInstance().getData();
-			
-//			out.collect(obj_dataset);
-
-//			try {
-//			adsData.crossWithTiny(obj_dataset).writeAsText("~/test_flink_out.txt", WriteMode.OVERWRITE).setParallelism(1);
-/*
-.map(
-
-			
-			).maxBy(2).writeAsText("~/flink_output.txt", WriteMode.OVERWRITE).setParallelism(1);
-*/
-//			}
-//			catch (Exception e) {
-//				System.out.println("Caught! :" + e);
-//			}
-		}
-	}
-
 	public static void main(String[] args) throws Exception {
 		new MessageStreamProcessor().start();
 	}
@@ -311,11 +280,8 @@ public class MessageStreamProcessor {
 		stream.map(new JsonToMessageObjectMapper())
 			.keyBy("thread_id")
 			.map(new MessageToDummyTuple7Map())	//.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
-			.flatMap(new MessageAdProcessor()).writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
-//			.reduce(new ReduceToWords())
-//			.writeAsText("/home/ubuntu/abhinav_words.txt", WriteMode.OVERWRITE)
-//			.setParallelism(1);
-
+			.flatMap(new MessageAdProcessor())
+			.map(new SimilarityCalculatorMap()).writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
 
 		// versions 0.10+ allow attaching the records' event timestamp when writing them to Kafka;
 		// this method is not available for earlier Kafka versions
