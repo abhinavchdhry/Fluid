@@ -136,6 +136,7 @@ public class MessageStreamProcessor {
 	final String AD_KEY_PREFIX = "AD_ID_KEY_";
 	final String SCORE_FIELD = "TOTAL_SCORE";
 	final String COUNT_FIELD = "TOTAL_COUNT";
+	final String CACHED_OBJ_PREFIX = "CACHED_OBJ_";
 
 	/*
 		Output tuples have format:
@@ -213,7 +214,7 @@ public class MessageStreamProcessor {
 								}
 								else {	// Current thread does not contain ad_id. Make an entry
 									// Create the thread-ad map object
-						                        String object_name = comment_thread_id + "_" + ad_id + "_OBJ";
+						                        String object_name = CACHED_OBJ_PREFIX + comment_thread_id + "_" + ad_id;
 
 							                jedis.hset(object_name, SCORE_FIELD, similarity.toString());
 								        jedis.hset(object_name, COUNT_FIELD, "1");
@@ -229,7 +230,7 @@ public class MessageStreamProcessor {
 						else {	// Create a THREAD_MAP, if exists also create the thread id map
 				
 							// Create the thread-ad map object
-							String object_name = comment_thread_id + "_" + ad_id + "_OBJ";
+							String object_name = CACHED_OBJ_PREFIX + comment_thread_id + "_" + ad_id;
 
 							jedis.hset(object_name, SCORE_FIELD, similarity.toString());
 							jedis.hset(object_name, COUNT_FIELD, "1");
