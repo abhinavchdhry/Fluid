@@ -279,20 +279,20 @@ public class MessageStreamProcessor {
 		// set up the execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-//		FlinkKafkaConsumer09[] consumers = getConsumerGroup(3, "consumergroup1");
                 Properties properties = new Properties();
-                properties.setProperty("bootstrap.servers", "127.0.0.1:9092");
-                properties.setProperty("zookeeper.connect", "127.0.0.1:2181");
-                properties.setProperty("group.id", "consumergroup3");
+                properties.setProperty("bootstrap.servers", "10.0.0.10:9092,10.0.0.5:9092,10.0.0.11:9092");
+//                properties.setProperty("zookeeper.connect", "10.0.0.10:2181,10.0.0.5:2181,10.0.0.11:2181");
+                properties.setProperty("group.id", "consumergroup4");
 
-//		FlinkKafkaConsumer09<ObjectNode> consumer = new FlinkKafkaConsumer09<>(TOPICNAME, new JSONKeyValueDeserializationSchema(false), properties);
-
-		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest21", new JSONDeserializationSchema(), properties));
-		stream.map(new JsonToMessageObjectMapper())
+//		DataStream<String> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest21", new SimpleStringSchema(), properties));
+//		stream.writeAsText("~/whatta.txt", WriteMode.OVERWRITE);
+		
+		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest21", new JSONDeserializationSchema(), properties)).setParallelism(4);
+		stream.map(new JsonToMessageObjectMapper()).setParallelism(4)
 			.keyBy("thread_id")
-			.map(new MessageToDummyTuple7Map())	//.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
-			.map(new MessageAdProcessor())
-			.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
+			.map(new MessageToDummyTuple7Map()).setParallelism(4)	//.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
+//			.map(new MessageAdProcessor())
+			.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(8);
 
 		// versions 0.10+ allow attaching the records' event timestamp when writing them to Kafka;
 		// this method is not available for earlier Kafka versions
