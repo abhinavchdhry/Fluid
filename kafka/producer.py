@@ -17,17 +17,25 @@ class Generator(object):
 
 	def _processFile(self, filepath):
 		try:
+			print("Reading in file to mem...")
 			fh = open(filepath,'r')
+			file_in_mem = [line for line in fh]
+			print("Done.")
 		except:
 			print("Error opening file: " + filepath + "!")
 			return
 
+		print("Sending file...")
+		start = time()
 		if self._keyFunc:
-			for line in fh:
+			for line in file_in_mem:
 				self._producer.send(self._topic, value=line, key=self._keyFunc(line))
 		else:
-			for line in fh:
+			for line in file_in_mem:
 				self._producer.send(self._topic, value=line)
+
+		end = time()
+		print("Elapsed time: " + str(end - start) + " secs")
 
 	def start(self):
 		files = os.listdir(self._filepath)
@@ -37,7 +45,7 @@ class Generator(object):
 
 PATH = '../data/reddit/'
 TOPICNAME = 'COMMENTS11'
-TOPICNAME = 'testtopic'
+TOPICNAME = 'jsontest21'
 
 ### Custom partition function ensures all Reddit comments in the same thread (link_id)
 ### is sent to same partition. customKeyFunc(record) returns the least signficant byte of the link_id
@@ -53,7 +61,7 @@ def customPartitionFunc(key_bytes, all_partitions, available_partitions):
 	return k%n_partitions
 
 CONFIGS = {
-	'bootstrap_servers': 'localhost:9092',
+	'bootstrap_servers': ['10.0.0.10:9092', '10.0.0.5:9092', '10.0.0.11:9092'],
 	'partitioner': customPartitionFunc
 }
 
@@ -71,5 +79,7 @@ def customKeyFunc(record):
 	return str(k).encode()
 
 ## Main
+from time import time
+
 g = Generator(PATH, producer, TOPICNAME, customKeyFunc)
 g.start()
