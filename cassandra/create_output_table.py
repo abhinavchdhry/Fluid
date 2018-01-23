@@ -12,3 +12,5 @@ create_table = """CREATE TABLE IF NOT EXISTS FINAL.OUTPUT_TABLE (
 
 session.execute(create_table)
 
+# Clear the table if it exists
+session.execute("""TRUNCATE FINAL.OUTPUT_TABLE""")
