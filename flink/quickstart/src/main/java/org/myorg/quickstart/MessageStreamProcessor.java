@@ -43,6 +43,9 @@ import org.apache.flink.core.fs.FileSystem.WriteMode;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.ProcessFunction.Context;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.api.common.functions.RichMapFunction;
 
 // Cassandra driver libs
 import com.datastax.driver.core.Cluster;
@@ -70,6 +73,7 @@ import info.debatty.java.stringsimilarity.Cosine;
 import java.util.ArrayList;
 import java.lang.Long;
 import java.lang.Integer;
+import java.lang.System;
 
 public class MessageStreamProcessor {
 
@@ -148,7 +152,24 @@ public class MessageStreamProcessor {
 		6	Ad body
 		7	Ad tags
 	*/
-	public class MessageAdProcessor implements MapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple3<String, String, Double>> {
+	public class MessageAdProcessor extends RichMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple3<String, String, Double>> {
+
+		private transient Long exectime = 0L;
+
+		@Override
+		public void open(Configuration config) {
+			getRuntimeContext()
+			.getMetricGroup()
+			.gauge("ExecutionTimeMetric", 
+				new Gauge<Long>() {
+					@Override
+					public Long getValue() {
+						return exectime;
+					}
+				}
+			);
+		}
+
 		@Override
 		public Tuple3<String, String, Double> map(Tuple7<String, String, String, String, String, String, String> in) throws Exception {
 			Jedis jedis = JedisHandle.getInstance().getHandle();
@@ -156,12 +177,14 @@ public class MessageStreamProcessor {
 			Double highest_score = new Double(-1);
 			String best_ad_id = "";
 
+			long start = System.nanoTime();
+
 			if (jedis.exists(ADS_TABLE)) {
 				Long len = jedis.llen(ADS_TABLE);
 
 				// Loop
 				for (Long i = new Long(0); i < len; i++) {
-					String ad_obj_key = jedis.lindex(ADS_TABLE, i);
+					String ad_obj_key = jedis.lindex(ADS_TABLE, i.longValue());
 
 					if (!ad_obj_key.startsWith(ADS_TABLE_KEY_PREFIX)) {
 						System.out.println("AD object prefix is not valid!!!");
@@ -259,6 +282,9 @@ public class MessageStreamProcessor {
 				System.out.println("REDIS_ADS_TABLE not found!!");
 			}
 
+			long end = System.nanoTime();
+			exectime = (end - start)/1000000;
+
 			return new Tuple3<String, String, Double>(in.f1, best_ad_id, highest_score);
 		}
 	}
@@ -279,24 +305,18 @@ public class MessageStreamProcessor {
 		// set up the execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
+// 		env.getConfig().setLatencyTrackingInterval(new Double(0.1).longValue());
+
                 Properties properties = new Properties();
                 properties.setProperty("bootstrap.servers", "10.0.0.10:9092,10.0.0.5:9092,10.0.0.11:9092");
-//                properties.setProperty("zookeeper.connect", "10.0.0.10:2181,10.0.0.5:2181,10.0.0.11:2181");
                 properties.setProperty("group.id", "consumergroup4");
 
-//		DataStream<String> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest21", new SimpleStringSchema(), properties));
-//		stream.writeAsText("~/whatta.txt", WriteMode.OVERWRITE);
-		
-		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest21", new JSONDeserializationSchema(), properties)).setParallelism(4);
-		stream.map(new JsonToMessageObjectMapper()).setParallelism(4)
+		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest22", new JSONDeserializationSchema(), properties)).setParallelism(3);
+		stream.map(new JsonToMessageObjectMapper()).setParallelism(3)
 			.keyBy("thread_id")
-			.map(new MessageToDummyTuple7Map()).setParallelism(4)	//.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
-//			.map(new MessageAdProcessor())
-			.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(8);
-
-		// versions 0.10+ allow attaching the records' event timestamp when writing them to Kafka;
-		// this method is not available for earlier Kafka versions
-//		myProducer.setWriteTimestampToKafka(true);
+			.map(new MessageToDummyTuple7Map()).setParallelism(3)	//.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
+			.map(new MessageAdProcessor()).setParallelism(3)
+			.writeAsText("~/this.txt", WriteMode.OVERWRITE);
 
 		env.execute("Stream processor");
 
