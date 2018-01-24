@@ -2,5 +2,19 @@
 <title style="color:white"></title>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
 <pre id="out"></pre>
-<p> Well we are here now </p>
+<p id="well"> Well we are here now </p>
 
+
+<p id="ad-box">Ad appears here:</p>
+
+<script>
+function stream() {
+	var source = new EventSource('/stream');
+	var ad = document.getElementById("well");
+	source.onMessage = function(e) {
+		console.log('Recieved msg!');
+		ad.innerHTML = e.data + ad.innerHTML;
+	};
+};
+stream();
+</script>

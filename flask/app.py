@@ -2,7 +2,9 @@ from flask import Flask
 from flask import render_template
 from flask import g
 from flask import jsonify
+from flask import Response
 from cassandra.cluster import Cluster
+import time
 
 app = Flask(__name__)
 
@@ -20,6 +22,16 @@ def entry():
 @app.route('/<thread_id>')
 def show_thread(thread_id):
 	return render_template('thread.html', thread=thread_id)
+
+def stream_source():
+	for i in range(1000):
+		time.sleep(1)
+		print("data: msg" + str(i))
+		yield "data: msg" + str(i)
+
+@app.route('/stream')
+def stream_update():
+	return Response(stream_source(), mimetype="text/event-stream")
 
 @app.before_request
 def before_request():
