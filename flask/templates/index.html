@@ -1,7 +1,7 @@
 <!doctype html>
 <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='stylesheets/style.css') }}"/>
 <title style="color:white">Conversation threads</title>
-<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
 <pre id="out"></pre>
 <!-- <style>body { max-width: 500px; margin: auto; padding: 1em; color: #fff; font: 16px/1.6 menlo, monospace; }</style> -->
 <h1 id="header">Fluid Demo</h1>
@@ -16,7 +16,7 @@
 	$(".thread").unbind().click(
 		function(e) {
 			window.location = "/".concat(e.target.id);
-		} 
+		}
 	);
 	</script>
 

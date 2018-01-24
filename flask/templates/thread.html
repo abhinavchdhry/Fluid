@@ -1,20 +1,22 @@
 <!doctype html>
 <title style="color:white"></title>
-<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
-<pre id="out"></pre>
-<p id="well"> Well we are here now </p>
-
-
-<p id="ad-box">Ad appears here:</p>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+<pre id="out" style="height:100px;color:black;">Ad appears here!</pre>
+<style>body { max-width: 500px; margin: auto; padding: 1em; color: #fff; font: 16px/1.6 menlo, monospace; }</style>
+<body>
+</body>
+<p id="ad-box" style="width:100%;height:100px;">Ad appears here:</p>
 
 <script>
 function stream() {
+	console.log("Executing");
 	var source = new EventSource('/stream');
-	var ad = document.getElementById("well");
-	source.onMessage = function(e) {
-		console.log('Recieved msg!');
-		ad.innerHTML = e.data + ad.innerHTML;
+	console.log("Created source");
+	var ad = document.getElementById("out");
+	source.onmessage = function(e) {
+		ad.innerHTML += e.data;
 	};
 };
+console.log("calling stream");
 stream();
 </script>
