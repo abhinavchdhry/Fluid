@@ -27,7 +27,7 @@ def stream_source():
 	for i in range(1000):
 		time.sleep(1)
 		print("data: msg" + str(i))
-		yield "data: msg" + str(i)
+		yield "data: msg%s\n\n" % str(i)
 
 @app.route('/stream')
 def stream_update():
