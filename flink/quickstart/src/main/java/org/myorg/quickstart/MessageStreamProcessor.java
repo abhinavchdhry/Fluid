@@ -59,7 +59,7 @@ import org.apache.flink.batch.connectors.cassandra.CassandraInputFormat;
 import org.apache.flink.streaming.connectors.cassandra.ClusterBuilder;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
-
+import org.apache.flink.streaming.connectors.cassandra.CassandraSink;
 
 // Redis client libs
 import redis.clients.jedis.Jedis;
@@ -67,7 +67,8 @@ import redis.clients.jedis.Jedis;
 // Local project libs
 import org.myorg.quickstart.MessageObject;
 import org.myorg.quickstart.JedisHandle;
-import org.myorg.quickstart.CassandraSession;
+//import org.myorg.quickstart.CassandraSession;
+import org.myorg.quickstart.PublisherJedisHandle;
 
 import info.debatty.java.stringsimilarity.Cosine;
 import java.util.ArrayList;
@@ -296,6 +297,19 @@ public class MessageStreamProcessor {
 		}
 	}
 
+	final String OUTPUT_CHANNEL = "THREAD_AD_MATCH";
+
+	public class OutputToRedisPublisherMap implements MapFunction<Tuple2<String, String>, Tuple2<String, String>> {
+		@Override
+		public Tuple2<String, String> map(Tuple2<String, String> in) {
+			Jedis jedis = PublisherJedisHandle.getInstance().getHandle();
+
+			String jsonString = new String("{\"thread_id\": \"" + in.f0 + "\", \"matched_ad_id\": \"" + in.f1 + "\"}");
+			jedis.publish(OUTPUT_CHANNEL, jsonString);
+
+			return in;
+		}
+	}
 
 	public static void main(String[] args) throws Exception {
 		new MessageStreamProcessor().start();
@@ -312,11 +326,19 @@ public class MessageStreamProcessor {
                 properties.setProperty("group.id", "consumergroup4");
 
 		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest22", new JSONDeserializationSchema(), properties)).setParallelism(3);
-		stream.map(new JsonToMessageObjectMapper()).setParallelism(3)
+
+		DataStream<Tuple2<String, String>> result = stream.map(new JsonToMessageObjectMapper()).setParallelism(3)
 			.keyBy("thread_id")
 			.map(new MessageToDummyTuple7Map()).setParallelism(3)	//.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
 			.map(new MessageAdProcessor()).setParallelism(3)
-			.writeAsText("~/this.txt", WriteMode.OVERWRITE);
+			.map(new MapFunction<Tuple3<String, String, Double>, Tuple2<String, String>>() {
+				@Override
+				public Tuple2<String, String> map(Tuple3<String, String, Double> in) throws Exception {
+					return new Tuple2<String, String>(in.f0, in.f1);
+				}
+			}
+			).setParallelism(3)
+			.map(new OutputToRedisPublisherMap()).setParallelism(3);
 
 		env.execute("Stream processor");
 
