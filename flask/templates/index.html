@@ -1,0 +1,25 @@
+<!doctype html>
+<link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='stylesheets/style.css') }}"/>
+<title style="color:white">Conversation threads</title>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+<pre id="out"></pre>
+<!-- <style>body { max-width: 500px; margin: auto; padding: 1em; color: #fff; font: 16px/1.6 menlo, monospace; }</style> -->
+<h1 id="header">Fluid Demo</h1>
+<p id="subtitle">Click on an available comment thread to monitor</p>
+<div class="parent">
+	{% for row in result %}
+	<div class="thread" id="{{ row.thread_id }}">
+		<p style="color:black"> {{ row.thread_id }} </p>
+	</div>
+
+	<script>
+	$(".thread").unbind().click(
+		function(e) {
+			window.location = "/".concat(e.target.id);
+		}
+	);
+	</script>
+
+        {% endfor %}
+</div>
+
