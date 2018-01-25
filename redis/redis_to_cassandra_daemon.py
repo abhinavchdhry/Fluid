@@ -19,6 +19,6 @@ prepared_insert_stmt = s.prepare("""INSERT INTO FINAL.OUTPUT_TABLE (thread_id, m
 
 print("Listening...")
 for msg in pubsub.listen():
-	if 'type' in msg and msg['type'] == 'message':
-		out = json.loads(msg.data)
+	if 'data' in msg and'type' in msg and msg['type'] == 'message':
+		out = json.loads(msg['data'])
 		s.execute(prepared_insert_stmt, [out['thread_id'], out['matched_ad_id']])
