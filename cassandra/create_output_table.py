@@ -14,3 +14,20 @@ session.execute(create_table)
 
 # Clear the table if it exists
 session.execute("""TRUNCATE FINAL.OUTPUT_TABLE""")
+
+create_msgs_table = """CREATE TABLE IF NOT EXISTS FINAL.MESSAGES (
+	id text PRIMARY KEY,
+	thread_id text,
+	author_id text,
+	parent_id text,
+	subreddit_id text,
+	body text,
+	score text
+	)"""
+
+session.execute(create_msgs_table)
+
+session.execute("""TRUNCATE FINAL.MESSAGES""")
+
+## Create a secondary index on the Messages table on thread_id column
+session.execute("""CREATE INDEX thread_id_index ON FINAL.MESSAGES (thread_id)""")
