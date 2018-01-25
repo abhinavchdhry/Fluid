@@ -21,7 +21,9 @@ def entry():
 
 @app.route('/<thread_id>')
 def show_thread(thread_id):
-	return render_template('thread.html', thread=thread_id)
+	result = g.session.execute("""SELECT * FROM FINAL.MESSAGES WHERE thread_id = %s""", ["thread_id"])
+	print("Returned row!")
+	return render_template('thread.html', thread=thread_id, results=result)
 
 def stream_source():
 	for i in range(1000):

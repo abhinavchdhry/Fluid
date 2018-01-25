@@ -45,7 +45,7 @@ class Generator(object):
 
 PATH = '../data/reddit/'
 TOPICNAME = 'COMMENTS11'
-TOPICNAME = 'jsontest21'
+TOPICNAME = 'jsontest22'
 
 ### Custom partition function ensures all Reddit comments in the same thread (link_id)
 ### is sent to same partition. customKeyFunc(record) returns the least signficant byte of the link_id
