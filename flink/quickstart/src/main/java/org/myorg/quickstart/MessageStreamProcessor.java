@@ -85,18 +85,18 @@ public class MessageStreamProcessor {
 		@Override
 		public MessageObject map(ObjectNode obj) throws Exception {
 			
-			String id = obj.has("id") ? obj.get("id").asText() : "",
-			String thread_id = obj.has("link_id") ? obj.get("link_id").asText() : "",
-			String author_id = obj.has("author_id") ? obj.get("author_id").asText() : "",
-			String score = obj.has("score") ? obj.get("score").asInt() : 0,
-			String parent_id = obj.has("parent_id") ? obj.get("parent_id").asText() : "",
-			String subreddit_id = obj.has("subreddit_id") ? obj.get("subreddit_id").asText() : "",
-			String body = obj.has("body") ? obj.get("body").asText() : ""
+			String id = obj.has("id") ? obj.get("id").asText() : "";
+			String thread_id = obj.has("link_id") ? obj.get("link_id").asText() : "";
+			String author_id = obj.has("author_id") ? obj.get("author_id").asText() : "";
+			String score = obj.has("score") ? obj.get("score").asText() : "0";
+			String parent_id = obj.has("parent_id") ? obj.get("parent_id").asText() : "";
+			String subreddit_id = obj.has("subreddit_id") ? obj.get("subreddit_id").asText() : "";
+			String body = obj.has("body") ? obj.get("body").asText() : "";
 
 			// Write messages to Redis cache and PubSub queue
 			JedisMessageWriter.getInstance().writeMessage(id, thread_id, parent_id, subreddit_id, author_id, body, score);
 
-			return new MessageObject(id, thread_id, author_id, score, parent_id, subreddit_id, body);
+			return new MessageObject(id, thread_id, author_id, Integer.valueOf(score), parent_id, subreddit_id, body);
 		}
 	}
 
