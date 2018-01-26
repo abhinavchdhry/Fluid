@@ -1,18 +1,25 @@
 <!doctype html>
+<link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='stylesheets/style.css') }}"/>
+
+<html>
 <title style="color:white"></title>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
-<pre id="out" style="height:100px;color:black;">Ad appears here!</pre>
-<style>body { max-width: 500px; margin: auto; padding: 1em; color: #fff; font: 16px/1.6 menlo, monospace; }</style>
+<!-- <pre id="out" style="height:100px;color:black;">Ad appears here!</pre> -->
+
+<style>body { max-width: 100%; margin: auto; padding: 1em; color: #fff; font: 16px/1.6 menlo, monospace; }</style>
 <body>
 </body>
-<!--<p id="ad-box" style="width:100%;height:100px;">Ad appears here:</p>-->
+
+<p style="color:black" id="comment-thread-header"> This is the comment thread </p>
 
 <div id="comment-thread">
-	<p> This is the comment thread </p>
-	{% for row in result %}
-        <div class="comment" id="{{ row.id }}">
-                <p style="color:black"> {{ row.id }} </p>
+
+	{% for key in results %}
+        <div class="comment" id="{{ key }}">
+                <p class="comment-text" style="color:black"> {{ results[key] }} </p>
         </div>
+
+	{% endfor %}
 
         <script>
         $(".comment").unbind().click(
@@ -20,9 +27,34 @@
 			alert('Comment clicked!');
                 }
         );
-        </script>
 
-        {% endfor %}
+	function comment_stream() {
+	console.log("Starting comment stream...");
+	var commentSource = new EventSource('/comment-stream/'.concat("{{ thread_id }}"));
+	var commentThread = document.getElementById("comment-thread");
+	console.log("Registering handler...");
+	commentSource.onmessage = function(e) {
+		console.log("Data rcvd...");
+		console.log(e.type);
+
+		if (e.type == "message") {
+			console.log(e.data)
+
+			var obj = JSON.parse(e.data);
+		
+			console.log("Msg rcvd...");
+			var newComment = $("<div>", { id: obj.key, "class":"comment" });
+			var newCommentText = $("<p class='comment-text' style='color:black'>".concat(obj.body).concat("</p>"));
+			newComment.append(newCommentText);
+
+			$("#comment-thread").prepend(newComment);
+		}
+	};
+
+	};
+	comment_stream();
+
+        </script>
 
 </div>
 
@@ -43,3 +75,4 @@ function stream() {
 console.log("calling stream");
 stream();
 </script>
+</html>

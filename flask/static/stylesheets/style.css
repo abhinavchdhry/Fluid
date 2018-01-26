@@ -44,13 +44,28 @@
 	-webkit-box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 7px 7px rgba(0,0,0,0.22);
 }
 
-.comment-thread{
-	width:50%;
-	left:10px;
+#comment-thread{
+	color:black;
+	max-width:70%;
+	float:left;
 }
 
-.ad-display{
-	width:25%;
-	position:absolute;
-	right:10px;
+#ad-display{
+	color:black;
+	max-width:25%;
+	float:right;
+}
+
+.comment{
+	background:gainsboro;
+	text-align:justify;
+	-moz-box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+	-webkit-box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+}
+
+.comment-text{
+	padding:10px;
+	padding-left:15px;
+	padding-right:15px;
+	text-align:justify;
 }
