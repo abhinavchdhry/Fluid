@@ -49,13 +49,15 @@ def entry():
 
 @app.route('/<thread_id>')
 def show_thread(thread_id):
-	result = session.execute("""SELECT * FROM FINAL.MESSAGES WHERE thread_id = %s""", [thread_id])
-	count = 0
+#	result = session.execute("""SELECT * FROM FINAL.MESSAGES WHERE thread_id = %s""", [thread_id])
 	body = {}
-	for row in result:
-		body[row.id] = row.body
-		count += 1
-	print("returned " + str(count) + " rows")
+	numMessagesInThread = r.llen("THREAD_MSG_MAP_" + thread_id)
+	for i in range(numMessagesInThread):
+		msg_key = r.lindex("THREAD_MSG_MAP_" + thread_id, i)
+		msg_id = msg_key[12:]
+		msg_body = r.lindex(msg_key, 4)
+		body[msg_id] = msg_body
+	
 	return render_template('thread.html', thread_id=thread_id, results=body)
 
 
