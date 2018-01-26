@@ -52,7 +52,7 @@
 
 #ad-display{
 	color:black;
-	max-width:25%;
+	max-width:27%;
 	float:right;
 }
 
@@ -68,4 +68,18 @@
 	padding-left:15px;
 	padding-right:15px;
 	text-align:justify;
+}
+
+.ad-frame {
+	color:black;
+}
+
+#ad-title {
+	font-weight:bold;
+	font-size:x-large;
+	padding:10px;
+}
+
+#ad-body {
+	padding:10px;
 }

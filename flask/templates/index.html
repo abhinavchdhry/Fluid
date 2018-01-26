@@ -15,6 +15,7 @@
 	<script>
 	$(".thread").unbind().click(
 		function(e) {
+			console.log("Thread clicked!");
 			window.location = "/".concat(e.currentTarget.id);
 		}
 	);

@@ -16,6 +16,8 @@ session = cluster.connect()
 
 prepared_query = session.prepare("""SELECT body FROM FINAL.MESSAGES WHERE thread_id = ? AND parent_id = ? ALLOW FILTERING""")
 
+prepared_ad_query = session.prepare("""SELECT title, body FROM FINAL.ADS_TABLE WHERE id = ?""")
+
 ## Setup connection to Redis
 r = redis.StrictRedis(host='10.0.0.4', db=0)
 
@@ -38,7 +40,6 @@ def entry():
 @app.route('/<thread_id>')
 def show_thread(thread_id):
 	result = session.execute("""SELECT * FROM FINAL.MESSAGES WHERE thread_id = %s""", [thread_id])
-	print("Returned row!")
 	count = 0
 	body = {}
 	for row in result:
@@ -47,15 +48,6 @@ def show_thread(thread_id):
 	print("returned " + str(count) + " rows")
 	return render_template('thread.html', thread_id=thread_id, results=body)
 
-def stream_source():
-	for i in range(1000):
-		time.sleep(1)
-		print("data: msg" + str(i))
-		yield "data: msg%s\n\n" % str(i)
-
-@app.route('/stream')
-def stream_update():
-	return Response(stream_source(), mimetype="text/event-stream")
 
 def comment_stream_source(thread_id):
 	subscriber = r.pubsub()
@@ -71,7 +63,33 @@ def comment_stream_source(thread_id):
 
 @app.route('/comment-stream/<thread_id>')
 def comment_stream(thread_id):
+	print('Comment stream started...')
 	return Response(comment_stream_source(thread_id), mimetype="text/event-stream")
+
+
+def ad_stream_source(thread_id):
+	ad_subscriber = r.pubsub()
+	ad_subscribe_channel = "AD_CHANNEL_" + thread_id
+	print("Subscribing to: ", ad_subscribe_channel)
+        ad_subscriber.subscribe(ad_subscribe_channel)
+	for msg in ad_subscriber.listen():
+		if msg['type'] == 'message':
+			obj = json.loads(msg['data'])
+			matched_ad_id = obj['matched_ad_id']
+			print("Matched ad: " + matched_ad_id)
+			res = session.execute(prepared_ad_query, [matched_ad_id])
+			for row in res:
+				print("Matching row found...")
+				print("title: " + row.title)
+				print("body: " + row.body)
+				break
+			yield "data: {\"title\":\"" + row.title + "\", \"body\":\"" + row.body + "\"}\n\n"
+
+
+@app.route('/ad-stream/<thread_id>')
+def ad_stream(thread_id):
+	print("Ad stream started...")
+	return Response(ad_stream_source(thread_id), mimetype="text/event-stream")
 
 #@app.before_request
 #def before_request():
@@ -87,4 +105,4 @@ def comment_stream(thread_id):
 
 if __name__ == '__main__':
 	app.debug = True
-	app.run(host='0.0.0.0')
+	app.run(host='0.0.0.0', threaded=True)

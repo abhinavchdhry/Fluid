@@ -4,6 +4,8 @@
 <html>
 <title style="color:white"></title>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+<script src="http://code.jquery.com/ui/1.10.4/jquery-ui.js"></script>
+
 <!-- <pre id="out" style="height:100px;color:black;">Ad appears here!</pre> -->
 
 <style>body { max-width: 100%; margin: auto; padding: 1em; color: #fff; font: 16px/1.6 menlo, monospace; }</style>
@@ -20,25 +22,27 @@
         </div>
 
 	{% endfor %}
+</div>
 
-        <script>
-        $(".comment").unbind().click(
-                function(e) {
-			alert('Comment clicked!');
-                }
-        );
+<script>
+$(".comment").unbind().click(
+        function(e) {
+		alert('Comment clicked!');
+        }
+);
 
-	function comment_stream() {
+
 	console.log("Starting comment stream...");
 	var commentSource = new EventSource('/comment-stream/'.concat("{{ thread_id }}"));
 	var commentThread = document.getElementById("comment-thread");
 	console.log("Registering handler...");
+
 	commentSource.onmessage = function(e) {
 		console.log("Data rcvd...");
 		console.log(e.type);
 
 		if (e.type == "message") {
-			console.log(e.data)
+			console.log(e.data);
 
 			var obj = JSON.parse(e.data);
 		
@@ -51,28 +55,75 @@
 		}
 	};
 
-	};
-	comment_stream();
 
-        </script>
 
-</div>
+</script>
+
 
 <div id="ad-display">
-<p> This is the ad display </p>
+	<p> This is the ad display </p>
+	
+	<div id="ad">
+		<div id="ad-title">
+
+		</div>
+
+		<div id="ad-body">
+
+		</div>
+	</div>
 </div>
 
 <script>
-function stream() {
-	console.log("Executing");
-	var source = new EventSource('/stream');
-	console.log("Created source");
-	var ad = document.getElementById("out");
-	source.onmessage = function(e) {
-		ad.innerHTML = e.data;
-	};
+
+var notLocked = true;
+$.fn.animateHighlight = function(highlightColor, duration) {
+    var highlightBg = highlightColor || "#FFFF9C";
+    var animateMs = duration || 1500;
+    var originalBg = this.css("backgroundColor");
+    if (notLocked) {
+        notLocked = false;
+        this.stop().css("background-color", highlightBg)
+            .animate({backgroundColor: originalBg}, animateMs);
+        setTimeout( function() { notLocked = true; }, animateMs);
+    }
 };
-console.log("calling stream");
-stream();
+
+
+$.fn.flash = function( color, duration )
+{
+
+    var current = this.css( 'color' );
+
+    this.animate( { color: 'rgb(' + color + ')' }, duration / 2 );
+    this.animate( { color: current }, duration / 2 );
+
+}
+
+
+console.log("Starting ad stream...");
+var adSource = new EventSource('/ad-stream/'.concat("{{ thread_id }}"));
+var adframe = document.getElementById("ad-display");
+var adtitle = document.getElementById("ad-title");
+var adbody = document.getElementById("ad-body");
+var ad = document.getElementById("ad");
+
+console.log("Registering ad handler...");
+
+adSource.onmessage = function(e) {
+	console.log("ad msg rcvd...");
+	if (e.type == 'message')
+	{
+		console.log(e.data);
+		var obj = JSON.parse(e.data);
+		
+		adtitle.innerHTML = obj.title;
+		adbody.innerHTML = obj.body;
+	
+		$("#ad").effect("highlight", {}, 1000);
+	}
+};
+
 </script>
+
 </html>
