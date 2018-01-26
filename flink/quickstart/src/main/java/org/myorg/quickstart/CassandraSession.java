@@ -80,7 +80,7 @@ public class CassandraSession {
 
 	public ArrayList<Tuple4<String, String, String, String>> getDataAsArray() {
 
-		final String SELECT_QUERY = "SELECT id, title, body, tags FROM ads.ads_table;";
+		final String SELECT_QUERY = "SELECT id, title, body, tags FROM final.ads_table;";
 
 		try {
 			ResultSet rs = session.execute(SELECT_QUERY);

@@ -44,11 +44,11 @@ $(".comment").unbind().click(
 		if (e.type == "message") {
 			console.log(e.data);
 
-			var obj = JSON.parse(e.data);
+//			var obj = JSON.parse(e.data);
 		
 			console.log("Msg rcvd...");
-			var newComment = $("<div>", { id: obj.key, "class":"comment" });
-			var newCommentText = $("<p class='comment-text' style='color:black'>".concat(obj.body).concat("</p>"));
+			var newComment = $("<div>", { "class":"comment" });
+			var newCommentText = $("<p class='comment-text' style='color:black'>".concat(e.data).concat("</p>"));
 			newComment.append(newCommentText);
 
 			$("#comment-thread").prepend(newComment);
@@ -61,7 +61,7 @@ $(".comment").unbind().click(
 
 
 <div id="ad-display">
-	<p> This is the ad display </p>
+	<p style="text-align:center;margin-right:50px;"> --- Ads will appear below --- </p>
 	
 	<div id="ad">
 		<div id="ad-title">

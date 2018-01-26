@@ -7,6 +7,7 @@ from cassandra.cluster import Cluster
 import time
 import redis
 import json
+from random import sample
 
 app = Flask(__name__)
 
@@ -24,16 +25,25 @@ r = redis.StrictRedis(host='10.0.0.4', db=0)
 
 @app.route('/')
 def entry():
-	query = """SELECT * FROM FINAL.OUTPUT_TABLE LIMIT 50"""
-	results = session.execute(query)
+#	query = """SELECT * FROM FINAL.OUTPUT_TABLE LIMIT 50"""
+#	results = session.execute(query)
+	threads = r.keys("THREAD_MSG_MAP_*")
+
+	if len(threads) > 25:
+		threads = sample(threads, 25)
+
 	out = {}
-	for row in results:
-		thread_id = row.thread_id
-		res = session.execute(prepared_query, [thread_id, thread_id])
-		for resrow in res:
-			if '[removed]' not in resrow.body and '[deleted]' not in resrow.body:
-				out[thread_id] = resrow.body
-			break
+#	for row in results:
+	for thread in threads:
+		thread_id = thread[15:]
+#		res = session.execute(prepared_query, [thread_id, thread_id])
+		msg_obj = r.lindex(thread, 0)
+		body = r.lindex(msg_obj, 4)
+		out[thread_id] = body
+#		for resrow in res:
+#			if '[removed]' not in resrow.body and '[deleted]' not in resrow.body:
+#				out[thread_id] = resrow.body
+#			break
 
 	return render_template('index.html', result=out)
 
@@ -51,7 +61,7 @@ def show_thread(thread_id):
 
 def comment_stream_source(thread_id):
 	subscriber = r.pubsub()
-	subscribe_channel = "THREAD_" + thread_id
+	subscribe_channel = "THREAD_CHANNEL_" + thread_id
 	print("Subscribing to: ", subscribe_channel)
 	subscriber.subscribe(subscribe_channel)
 	for msg in subscriber.listen():
@@ -74,16 +84,18 @@ def ad_stream_source(thread_id):
         ad_subscriber.subscribe(ad_subscribe_channel)
 	for msg in ad_subscriber.listen():
 		if msg['type'] == 'message':
-			obj = json.loads(msg['data'])
-			matched_ad_id = obj['matched_ad_id']
+#			obj = json.loads(msg['data'])
+			matched_ad_id = msg['data']
 			print("Matched ad: " + matched_ad_id)
-			res = session.execute(prepared_ad_query, [matched_ad_id])
-			for row in res:
-				print("Matching row found...")
-				print("title: " + row.title)
-				print("body: " + row.body)
-				break
-			yield "data: {\"title\":\"" + row.title + "\", \"body\":\"" + row.body + "\"}\n\n"
+#			res = session.execute(prepared_ad_query, [matched_ad_id])
+#			for row in res:
+#				print("Matching row found...")
+#				print("title: " + row.title)
+#				print("body: " + row.body)
+#				break
+			title = r.lindex('AD_KEY_PREFIX_' + matched_ad_id, 0)
+			body = r.lindex('AD_KEY_PREFIX_' + matched_ad_id, 1)
+			yield "data: {\"title\":\"" + title + "\", \"body\":\"" + body + "\"}\n\n"
 
 
 @app.route('/ad-stream/<thread_id>')
