@@ -69,6 +69,7 @@ import org.myorg.quickstart.MessageObject;
 import org.myorg.quickstart.JedisHandle;
 //import org.myorg.quickstart.CassandraSession;
 import org.myorg.quickstart.PublisherJedisHandle;
+import org.myorg.quickstart.JedisMessageWriter;
 
 import info.debatty.java.stringsimilarity.Cosine;
 import java.util.ArrayList;
@@ -78,42 +79,24 @@ import java.lang.System;
 
 public class MessageStreamProcessor {
 
-	final static String TOPICNAME = "testtopic";
+	final static String TOPICNAME = "jsontest22";
 
 	public final class JsonToMessageObjectMapper implements MapFunction<ObjectNode, MessageObject> {
 		@Override
 		public MessageObject map(ObjectNode obj) throws Exception {
-			return new MessageObject(
-				obj.has("id") ? obj.get("id").asText() : "",
-				obj.has("link_id") ? obj.get("link_id").asText() : "",
-				obj.has("author_id") ? obj.get("author_id").asText() : "",
-				obj.has("score") ? obj.get("score").asInt() : 0,
-				obj.has("parent_id") ? obj.get("parent_id").asText() : "",
-				obj.has("subreddit_id") ? obj.get("subreddit_id").asText() : "",
-				obj.has("body") ? obj.get("body").asText() : ""
-			);
-		}
-	}
+			
+			String id = obj.has("id") ? obj.get("id").asText() : "";
+			String thread_id = obj.has("link_id") ? obj.get("link_id").asText() : "";
+			String author_id = obj.has("author_id") ? obj.get("author_id").asText() : "";
+			String score = obj.has("score") ? obj.get("score").asText() : "0";
+			String parent_id = obj.has("parent_id") ? obj.get("parent_id").asText() : "";
+			String subreddit_id = obj.has("subreddit_id") ? obj.get("subreddit_id").asText() : "";
+			String body = obj.has("body") ? obj.get("body").asText() : "";
 
-	public final class MessageObjToStringMap implements MapFunction<MessageObject, String> {
-		@Override
-		public String map(MessageObject obj) throws Exception {
-			return obj.toString();
-		}
-	}
+			// Write messages to Redis cache and PubSub queue
+			JedisMessageWriter.getInstance().writeMessage(id, thread_id, parent_id, subreddit_id, author_id, body, score);
 
-	public final class ReduceToWords implements ReduceFunction<MessageObject> {
-		@Override
-		public MessageObject reduce(MessageObject o1, MessageObject o2) throws Exception {
-			return new MessageObject(
-				o1.id,
-				o1.thread_id,
-				o1.author_id,
-				o1.score + o2.score,
-				o1.parent_id,
-				o1.subreddit_id,
-				o1.body + o2.body
-			);
+			return new MessageObject(id, thread_id, author_id, Integer.valueOf(score), parent_id, subreddit_id, body);
 		}
 	}
 
@@ -153,7 +136,7 @@ public class MessageStreamProcessor {
 		6	Ad body
 		7	Ad tags
 	*/
-	public class MessageAdProcessor extends RichMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple3<String, String, Double>> {
+	public class MessageAdProcessor extends RichMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple2<String, String>> {
 
 		private transient Long exectime = 0L;
 
@@ -172,7 +155,7 @@ public class MessageStreamProcessor {
 		}
 
 		@Override
-		public Tuple3<String, String, Double> map(Tuple7<String, String, String, String, String, String, String> in) throws Exception {
+		public Tuple2<String, String> map(Tuple7<String, String, String, String, String, String, String> in) throws Exception {
 			Jedis jedis = JedisHandle.getInstance().getHandle();
 
 			Double highest_score = new Double(-1);
@@ -286,7 +269,7 @@ public class MessageStreamProcessor {
 			long end = System.nanoTime();
 			exectime = (end - start)/1000000;
 
-			return new Tuple3<String, String, Double>(in.f1, best_ad_id, highest_score);
+			return new Tuple2<String, String>(in.f1, best_ad_id);
 		}
 	}
 
@@ -297,15 +280,17 @@ public class MessageStreamProcessor {
 		}
 	}
 
-	final String OUTPUT_CHANNEL = "THREAD_AD_MATCH";
+//	final String OUTPUT_CHANNEL_PREFIX = "AD_CHANNEL_";
 
 	public class OutputToRedisPublisherMap implements MapFunction<Tuple2<String, String>, Tuple2<String, String>> {
 		@Override
 		public Tuple2<String, String> map(Tuple2<String, String> in) {
-			Jedis jedis = PublisherJedisHandle.getInstance().getHandle();
+//			Jedis jedis = PublisherJedisHandle.getInstance().getHandle();
 
-			String jsonString = new String("{\"thread_id\": \"" + in.f0 + "\", \"matched_ad_id\": \"" + in.f1 + "\"}");
-			jedis.publish(OUTPUT_CHANNEL, jsonString);
+			PublisherJedisHandle.getInstance().publishMatch(in.f0, in.f1);
+
+//			String jsonString = new String(in.f1);
+//			jedis.publish(OUTPUT_CHANNEL_PREFIX + in.f0, jsonString);
 
 			return in;
 		}
@@ -325,20 +310,15 @@ public class MessageStreamProcessor {
                 properties.setProperty("bootstrap.servers", "10.0.0.10:9092,10.0.0.5:9092,10.0.0.11:9092");
                 properties.setProperty("group.id", "consumergroup4");
 
-		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>("jsontest22", new JSONDeserializationSchema(), properties)).setParallelism(3);
+		Integer parallelism = new Integer(3);
 
-		DataStream<Tuple2<String, String>> result = stream.map(new JsonToMessageObjectMapper()).setParallelism(3)
+		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>(TOPICNAME, new JSONDeserializationSchema(), properties)).setParallelism(parallelism);
+
+		stream.map(new JsonToMessageObjectMapper()).setParallelism(parallelism)
 			.keyBy("thread_id")
-			.map(new MessageToDummyTuple7Map()).setParallelism(3)	//.writeAsText("~/idunnowhat.txt", WriteMode.OVERWRITE).setParallelism(1);
-			.map(new MessageAdProcessor()).setParallelism(3)
-			.map(new MapFunction<Tuple3<String, String, Double>, Tuple2<String, String>>() {
-				@Override
-				public Tuple2<String, String> map(Tuple3<String, String, Double> in) throws Exception {
-					return new Tuple2<String, String>(in.f0, in.f1);
-				}
-			}
-			).setParallelism(3)
-			.map(new OutputToRedisPublisherMap()).setParallelism(3);
+			.map(new MessageToDummyTuple7Map()).setParallelism(parallelism)
+			.map(new MessageAdProcessor()).setParallelism(parallelism)
+			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism);
 
 		env.execute("Stream processor");
 

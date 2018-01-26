@@ -13,7 +13,7 @@ if len(sys.argv) != 2:
 
 N = int(sys.argv[1])
 
-r = redis.StrictRedis(host='10.0.0.10', port=6379, db=0)
+r = redis.StrictRedis(host='10.0.0.4', port=6379, db=0)
 
 # Main code
 #query = """SELECT * FROM ads.ads_table"""
