@@ -156,30 +156,32 @@ public class MessageStreamProcessor {
 
 		@Override
 		public Tuple2<String, String> map(Tuple7<String, String, String, String, String, String, String> in) throws Exception {
-			Jedis jedis = JedisHandle.getInstance().getHandle();
 
+			Jedis jedis = JedisHandle.getInstance().getHandle();		// Write state and cached data to this instance
+			Jedis jedisAds = JedisAdsReader.getInstance().getHandle();	// Read ads from this handle
+	
 			Double highest_score = new Double(-1);
 			String best_ad_id = "";
 
 			long start = System.nanoTime();
 
-			if (jedis.exists(ADS_TABLE)) {
-				Long len = jedis.llen(ADS_TABLE);
+			if (jedisAds.exists(ADS_TABLE)) {
+				Long len = jedisAds.llen(ADS_TABLE);
 
 				// Loop
 				for (Long i = new Long(0); i < len; i++) {
-					String ad_obj_key = jedis.lindex(ADS_TABLE, i.longValue());
+					String ad_obj_key = jedisAds.lindex(ADS_TABLE, i.longValue());
 
 					if (!ad_obj_key.startsWith(ADS_TABLE_KEY_PREFIX)) {
 						System.out.println("AD object prefix is not valid!!!");
 					}
 
-					String ad_id = ad_obj_key.substring(ADS_TABLE_KEY_PREFIX.length()-1);
+					String ad_id = ad_obj_key.substring(ADS_TABLE_KEY_PREFIX.length());
 
-					if (jedis.exists(ad_obj_key) && jedis.llen(ad_obj_key) == new Integer(3).longValue()) {
-						String ad_title = jedis.lindex(ad_obj_key, new Integer(0).longValue());
-						String ad_body = jedis.lindex(ad_obj_key, new Integer(1).longValue());
-						String ad_tags = jedis.lindex(ad_obj_key, new Integer(2).longValue());
+					if (jedisAds.exists(ad_obj_key) && jedisAds.llen(ad_obj_key) == new Integer(3).longValue()) {
+						String ad_title = jedisAds.lindex(ad_obj_key, new Integer(0).longValue());
+						String ad_body = jedisAds.lindex(ad_obj_key, new Integer(1).longValue());
+						String ad_tags = jedisAds.lindex(ad_obj_key, new Integer(2).longValue());
 
 						String comment_id = in.f0;
 						String comment_thread_id = in.f1;
@@ -318,7 +320,8 @@ public class MessageStreamProcessor {
 			.keyBy("thread_id")
 			.map(new MessageToDummyTuple7Map()).setParallelism(parallelism)
 			.map(new MessageAdProcessor()).setParallelism(parallelism)
-			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism);
+			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism)
+			.writeAsText("~/text_file2.txt", WriteMode.OVERWRITE).setParallelism(1);
 
 		env.execute("Stream processor");
 
