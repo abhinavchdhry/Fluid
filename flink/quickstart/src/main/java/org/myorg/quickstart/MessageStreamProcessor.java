@@ -280,16 +280,17 @@ public class MessageStreamProcessor {
 		}
 	}
 
-	final String OUTPUT_CHANNEL_PREFIX = "AD_CHANNEL_";
+//	final String OUTPUT_CHANNEL_PREFIX = "AD_CHANNEL_";
 
 	public class OutputToRedisPublisherMap implements MapFunction<Tuple2<String, String>, Tuple2<String, String>> {
 		@Override
 		public Tuple2<String, String> map(Tuple2<String, String> in) {
-			Jedis jedis = PublisherJedisHandle.getInstance().getHandle();
+//			Jedis jedis = PublisherJedisHandle.getInstance().getHandle();
 
-//			String jsonString = new String("{\"thread_id\": \"" + in.f0 + "\", \"matched_ad_id\": \"" + in.f1 + "\"}");
-			String jsonString = new String(in.f1);
-			jedis.publish(OUTPUT_CHANNEL_PREFIX + in.f0, jsonString);
+			PublisherJedisHandle.getInstance().publishMatch(in.f0, in.f1);
+
+//			String jsonString = new String(in.f1);
+//			jedis.publish(OUTPUT_CHANNEL_PREFIX + in.f0, jsonString);
 
 			return in;
 		}
@@ -309,13 +310,15 @@ public class MessageStreamProcessor {
                 properties.setProperty("bootstrap.servers", "10.0.0.10:9092,10.0.0.5:9092,10.0.0.11:9092");
                 properties.setProperty("group.id", "consumergroup4");
 
-		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>(TOPICNAME, new JSONDeserializationSchema(), properties)).setParallelism(3);
+		Integer parallelism = new Integer(3);
 
-		DataStream<Tuple2<String, String>> result = stream.map(new JsonToMessageObjectMapper()).setParallelism(3)
+		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>(TOPICNAME, new JSONDeserializationSchema(), properties)).setParallelism(parallelism);
+
+		stream.map(new JsonToMessageObjectMapper()).setParallelism(parallelism)
 			.keyBy("thread_id")
-			.map(new MessageToDummyTuple7Map()).setParallelism(3)
-			.map(new MessageAdProcessor()).setParallelism(3)
-			.map(new OutputToRedisPublisherMap()).setParallelism(3);
+			.map(new MessageToDummyTuple7Map()).setParallelism(parallelism)
+			.map(new MessageAdProcessor()).setParallelism(parallelism)
+			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism);
 
 		env.execute("Stream processor");
 

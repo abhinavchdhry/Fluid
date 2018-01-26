@@ -6,6 +6,9 @@ public class PublisherJedisHandle {
 	private static Jedis publisherJedis;
 	private static PublisherJedisHandle jedis_handle;
 
+	private static final String MATCH_PREFIX = "MATCH_";
+	private static final String OUTPUT_CHANNEL_PREFIX = "AD_CHANNEL_";
+
 	private PublisherJedisHandle() { }
 
 	public static PublisherJedisHandle getInstance() {
@@ -18,5 +21,12 @@ public class PublisherJedisHandle {
 
 	public static Jedis getHandle() {
 		return publisherJedis;
+	}
+
+	public static void publishMatch(String thread_id, String matched_ad_id) {
+		Jedis j = getInstance().getHandle();
+
+		j.set("MATCH_" + thread_id, matched_ad_id);
+		j.publish(OUTPUT_CHANNEL_PREFIX + thread_id, matched_ad_id);
 	}
 }
