@@ -27,36 +27,45 @@ r = redis.StrictRedis(host='10.0.0.4', db=0)
 def entry():
 #	query = """SELECT * FROM FINAL.OUTPUT_TABLE LIMIT 50"""
 #	results = session.execute(query)
-	threads = r.keys("THREAD_MSG_MAP_*")
+#	threads = r.keys("THREAD_MSG_MAP_*")
 
-	if len(threads) > 25:
-		threads = sample(threads, 25)
+	curMatches = r.keys("MATCH_*")
+
+	if len(curMatches) > 25:
+		curMatches = sample(curMatches, 25)
 
 	out = {}
 #	for row in results:
-	for thread in threads:
-		thread_id = thread[15:]
+	for match in curMatches:
+		thread_id = match[len('MATCH_'):]
 #		res = session.execute(prepared_query, [thread_id, thread_id])
-		msg_obj = r.lindex(thread, 0)
+		msg_obj = r.lindex("THREAD_MSG_MAP_" + thread_id, 0)
+	
 		body = r.lindex(msg_obj, 4)
-		out[thread_id] = body
-#		for resrow in res:
-#			if '[removed]' not in resrow.body and '[deleted]' not in resrow.body:
-#				out[thread_id] = resrow.body
-#			break
-
+		if '[removed]' not in body and '[deleted]' not in body:
+			out[thread_id] = body
+	
 	return render_template('index.html', result=out)
 
 @app.route('/<thread_id>')
 def show_thread(thread_id):
-	result = session.execute("""SELECT * FROM FINAL.MESSAGES WHERE thread_id = %s""", [thread_id])
-	count = 0
+#	result = session.execute("""SELECT * FROM FINAL.MESSAGES WHERE thread_id = %s""", [thread_id])
 	body = {}
-	for row in result:
-		body[row.id] = row.body
-		count += 1
-	print("returned " + str(count) + " rows")
-	return render_template('thread.html', thread_id=thread_id, results=body)
+	numMessagesInThread = r.llen("THREAD_MSG_MAP_" + thread_id)
+	for i in range(numMessagesInThread):
+		msg_key = r.lindex("THREAD_MSG_MAP_" + thread_id, i)
+		msg_id = msg_key[12:]
+		msg_body = r.lindex(msg_key, 4)
+		body[msg_id] = msg_body
+	
+	# Get the currently matched ad now
+	matched_ad_id = r.get("MATCH_" + thread_id)
+	matched_ad = {}
+	matched_ad['title'] = r.lindex("AD_KEY_PREFIX_" + matched_ad_id, 2)
+	matched_ad['body'] = r.lindex("AD_KEY_PREFIX_" + matched_ad_id, 1)
+	matched_ad['tags'] = r.lindex("AD_KEY_PREFIX_" + matched_ad_id, 0)
+
+	return render_template('thread.html', thread_id=thread_id, results=body, matched_ad=matched_ad)
 
 
 def comment_stream_source(thread_id):
