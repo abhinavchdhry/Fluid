@@ -41,11 +41,23 @@ def entry():
 #		res = session.execute(prepared_query, [thread_id, thread_id])
 		msg_obj = r.lindex("THREAD_MSG_MAP_" + thread_id, 0)
 	
-		body = r.lindex(msg_obj, 4)
+		body = r.lindex(msg_obj, 4).decode('utf-8')
 		if '[removed]' not in body and '[deleted]' not in body:
 			out[thread_id] = body
 	
-	return render_template('index.html', result=out)
+	### FOR DEMO: fixed thread
+	fixed_id = 't3_1v0vw'
+        msg_obj1 = r.lindex("THREAD_MSG_MAP_" + fixed_id, 0)
+
+	fixed_obj = {}
+        body1 = r.lindex(msg_obj1, 4).decode('utf-8')
+        if '[removed]' not in body1 and '[deleted]' not in body1:
+		fixed_obj["id"] = fixed_id
+        	fixed_obj["body"] = body1
+
+	print(out)
+	print(fixed_obj)
+	return render_template('index.html', result=out, fixed=fixed_obj)
 
 @app.route('/<thread_id>')
 def show_thread(thread_id):
@@ -55,15 +67,20 @@ def show_thread(thread_id):
 	for i in range(numMessagesInThread):
 		msg_key = r.lindex("THREAD_MSG_MAP_" + thread_id, i)
 		msg_id = msg_key[12:]
-		msg_body = r.lindex(msg_key, 4)
-		body[msg_id] = msg_body
+		msg_author = r.lindex(msg_key, 3).decode('utf-8')
+		msg_author = 'Anonymous' if msg_author.strip() == '' else msg_author.title()
+		msg_body = r.lindex(msg_key, 4).decode('utf-8')
+		body[msg_id] = { 'body': msg_body, 'author': msg_author }
 	
 	# Get the currently matched ad now
 	matched_ad_id = r.get("MATCH_" + thread_id)
 	matched_ad = {}
-	matched_ad['title'] = r.lindex("AD_KEY_PREFIX_" + matched_ad_id, 2)
-	matched_ad['body'] = r.lindex("AD_KEY_PREFIX_" + matched_ad_id, 1)
-	matched_ad['tags'] = r.lindex("AD_KEY_PREFIX_" + matched_ad_id, 0)
+	matched_ad['title'] = r.lindex("AD_KEY_PREFIX_" + matched_ad_id, 0).decode('utf-8')
+	matched_ad['body'] = r.lindex("AD_KEY_PREFIX_" + matched_ad_id, 1).decode('utf-8')
+	matched_ad['tags'] = r.lindex("AD_KEY_PREFIX_" + matched_ad_id, 2).decode('utf-8')
+
+	if r.llen("AD_KEY_PREFIX_" + matched_ad_id) == 4:
+		matched_ad['img'] = r.lindex("AD_KEY_PREFIX_" + matched_ad_id, 3)
 
 	return render_template('thread.html', thread_id=thread_id, results=body, matched_ad=matched_ad)
 
@@ -93,18 +110,17 @@ def ad_stream_source(thread_id):
         ad_subscriber.subscribe(ad_subscribe_channel)
 	for msg in ad_subscriber.listen():
 		if msg['type'] == 'message':
-#			obj = json.loads(msg['data'])
 			matched_ad_id = msg['data']
 			print("Matched ad: " + matched_ad_id)
-#			res = session.execute(prepared_ad_query, [matched_ad_id])
-#			for row in res:
-#				print("Matching row found...")
-#				print("title: " + row.title)
-#				print("body: " + row.body)
-#				break
 			title = r.lindex('AD_KEY_PREFIX_' + matched_ad_id, 0)
 			body = r.lindex('AD_KEY_PREFIX_' + matched_ad_id, 1)
-			yield "data: {\"title\":\"" + title + "\", \"body\":\"" + body + "\"}\n\n"
+			img = r.lindex('AD_KEY_PREFIX_' + matched_ad_id, 3) if r.llen('AD_KEY_PREFIX_' + matched_ad_id) == 4 else None
+			
+			if img is None:
+				out = "data: {\"title\":\"" + title + "\", \"body\":\"" + body + "\"}\n\n"
+			else:
+				out = "data: {\"title\":\"" + title + "\", \"body\":\"" + body + "\", \"img\":\"" + img + "\"}\n\n"
+			yield out
 
 
 @app.route('/ad-stream/<thread_id>')

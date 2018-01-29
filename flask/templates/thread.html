@@ -1,6 +1,12 @@
 <!doctype html>
 <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='stylesheets/style.css') }}"/>
 
+<!-- Compiled and minified CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.2/css/materialize.min.css">
+<!-- Compiled and minified JavaScript -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.2/js/materialize.min.js"></script>
+<link href="https://fonts.googleapis.com/css?family=Bitter|Arimo|Merriweather|Open+Sans|Roboto" rel="stylesheet">
+
 <html>
 <title style="color:white"></title>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
@@ -8,18 +14,45 @@
 
 <!-- <pre id="out" style="height:100px;color:black;">Ad appears here!</pre> -->
 
-<style>body { max-width: 100%; margin: auto; padding: 1em; color: #fff; font: 16px/1.6 menlo, monospace; }</style>
+<style>body { max-width: 100%; margin: auto; padding: 1em; color: #fff; /* font: 16px/1.6 menlo, monospace;*/ }</style>
 <body>
 </body>
 
-<p style="color:black" id="comment-thread-header"> This is the comment thread </p>
+<nav>
+    <div class="nav-wrapper">
+      <a href="#" class="brand-logo center">Fluid Demo</a>
+      <ul id="nav-mobile" class="left hide-on-med-and-down">
+<!---        <li><a href="sass.html">Sass</a></li>
+        <li><a href="badges.html">Components</a></li>
+        <li><a href="collapsible.html">JavaScript</a></li>	--->
+      </ul>
+    </div>
+  </nav>
+
+<!--- <p style="color:black" id="comment-thread-header"> This is the comment thread </p> -->
 
 <div id="comment-thread">
 
 	{% for key in results %}
-        <div class="comment" id="{{ key }}">
+<!--        <div class="comment" id="{{ key }}">
                 <p class="comment-text" style="color:black"> {{ results[key] }} </p>
         </div>
+-->
+
+	<div class="comment1" id="{{ key }}">
+		<div class="message-wrapper them">
+			<div class="circle-wrapper animated bounceIn"><img src="{{ url_for('static', filename='stylesheets/common.png') }}" style="max-width: 100%;"></div>
+			<div class="text-wrapper animated fadeIn">
+				{{ results[key].body }}
+			</div>
+			
+			<div class="chip" alt="">
+				{{ results[key].author }}
+			</div>
+		</div>
+		
+        
+	</div>
 
 	{% endfor %}
 </div>
@@ -44,11 +77,15 @@ $(".comment").unbind().click(
 		if (e.type == "message") {
 			console.log(e.data);
 
-//			var obj = JSON.parse(e.data);
+			var obj = JSON.parse(e.data);
 		
 			console.log("Msg rcvd...");
-			var newComment = $("<div>", { "class":"comment" });
-			var newCommentText = $("<p class='comment-text' style='color:black'>".concat(e.data).concat("</p>"));
+			var newComment = $("<div>", { "class":"comment1" });
+
+//			var newCommentText = $("<p class='comment-text' style='color:black'>".concat(e.data).concat("</p>"));
+			var newCommentText = $(
+		                "<div class='message-wrapper them'><div class='circle-wrapper animated bounceIn'><img src=\"{{ url_for('static', filename='stylesheets/common.png') }}\" style=\"max-width: 100%;\"></div><div class='text-wrapper animated fadeIn'>".concat(obj.body).concat("</div><div class='chip' alt=''>").concat(obj.author).concat("</div></div>")
+			);
 			newComment.append(newCommentText);
 
 			$("#comment-thread").prepend(newComment);
@@ -61,16 +98,31 @@ $(".comment").unbind().click(
 
 
 <div id="ad-display">
-	<p style="text-align:center;margin-right:50px;"> --- Ads will appear below --- </p>
 	
 	<div id="ad">
-		<div id="ad-title">
+<!--		<div id="ad-title">
 			{{ matched_ad.title }}
 		</div>
 
 		<div id="ad-body">
 			{{ matched_ad.body }}
 		</div>
+-->		
+	<p style="text-align:center;"> Fluid Ad </p>
+  <div class="row">
+      <div class="card">
+        <div class="card-image" id="ad-image">
+		{% if 'img' in matched_ad %}
+          		<img src="{{ matched_ad.img }}">
+		{% endif %}
+        </div>
+          <div id="ad-title-card" class="card-title">{{ matched_ad.title }}</div>
+        <div class="card-content" id="ad-content-card">
+	<p>{{ matched_ad.body }}</p>
+        </div>
+      </div>
+  </div>
+            
 	</div>
 </div>
 
@@ -103,10 +155,10 @@ $.fn.flash = function( color, duration )
 
 console.log("Starting ad stream...");
 var adSource = new EventSource('/ad-stream/'.concat("{{ thread_id }}"));
-var adframe = document.getElementById("ad-display");
-var adtitle = document.getElementById("ad-title");
-var adbody = document.getElementById("ad-body");
+var adtitle = document.getElementById("ad-title-card");
+var adbody = document.getElementById("ad-content-card");
 var ad = document.getElementById("ad");
+var adimage = document.getElementById("ad-image");
 
 console.log("Registering ad handler...");
 
@@ -119,7 +171,13 @@ adSource.onmessage = function(e) {
 		
 		adtitle.innerHTML = obj.title;
 		adbody.innerHTML = obj.body;
-	
+		if ('img' in obj) {
+			adimage.innerHTML = "<img src=".concat(obj.img).concat(">");
+		}
+		else {
+			adimage.innerHTML = "";
+		}
+
 		$("#ad").effect("highlight", {}, 1000);
 	}
 };

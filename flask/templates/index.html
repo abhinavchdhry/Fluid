@@ -1,19 +1,53 @@
 <!doctype html>
 <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='stylesheets/style.css') }}"/>
+<!-- Compiled and minified CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.2/css/materialize.min.css">
+<!-- Compiled and minified JavaScript -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.2/js/materialize.min.js"></script>
+
 <title style="color:white">Conversation threads</title>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
 <pre id="out"></pre>
 <!-- <style>body { max-width: 500px; margin: auto; padding: 1em; color: #fff; font: 16px/1.6 menlo, monospace; }</style> -->
 <h1 id="header">Fluid Demo</h1>
 <p id="subtitle">Click on an available comment thread to monitor</p>
+
 <div class="parent">
+<!--        <div class="thread" id="{{ fixed.id }}">
+                <p class="thread-body" style="color:black"> {{ fixed.body }} </p>
+        </div>
+
+
+        <div class="thread-block" id="{{ fixed.id }}">
+        <div class="col s12 m6">
+          <div class="card blue-grey darken-1">
+            <div class="card-content white-text">
+              <span class="card-title">Thread</span>
+                <p> {{ fixed.body }} </p>
+            </div>
+          </div>
+        </div>
+        </div>
+-->
 	{% for key in result %}
-	<div class="thread" id="{{ key }}">
-		<p class="thread-body" style="color:black"> {{ result[key] }} </p>
+
+	<div class="thread-block" id="{{ key }}">
+        <div class="col s12 m6">
+          <div class="card blue-grey darken-1">
+            <div class="card-content white-text">
+              <span class="card-title">Thread {{ key }} </span>
+		<p> {{ result[key] }} </p>
+            </div>
+          </div>
+        </div>
 	</div>
 
+<!--	<div class="thread" id="{{ key }}">
+		<p class="thread-body" style="color:black"> {{ result[key] }} </p>
+	</div>
+-->
 	<script>
-	$(".thread").unbind().click(
+	$(".thread-block").unbind().click(
 		function(e) {
 			console.log("Thread clicked!");
 			window.location = "/".concat(e.currentTarget.id);
