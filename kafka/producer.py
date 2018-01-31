@@ -43,7 +43,7 @@ class Generator(object):
 			self._processFile(self._filepath + _f)
 
 
-PATH = '../data/reddit/'
+PATH = '/home/ubuntu/Fluid/data/reddit/'
 TOPICNAME = 'COMMENTS11'
 TOPICNAME = 'jsontest22'
 

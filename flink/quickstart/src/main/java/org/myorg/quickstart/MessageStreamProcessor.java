@@ -312,7 +312,7 @@ public class MessageStreamProcessor {
                 properties.setProperty("bootstrap.servers", "10.0.0.10:9092,10.0.0.5:9092,10.0.0.11:9092");
                 properties.setProperty("group.id", "consumergroup4");
 
-		Integer parallelism = new Integer(3);
+		Integer parallelism = new Integer(4);
 
 		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>(TOPICNAME, new JSONDeserializationSchema(), properties)).setParallelism(parallelism);
 
@@ -320,8 +320,8 @@ public class MessageStreamProcessor {
 			.keyBy("thread_id")
 			.map(new MessageToDummyTuple7Map()).setParallelism(parallelism)
 			.map(new MessageAdProcessor()).setParallelism(parallelism)
-			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism)
-			.writeAsText("~/text_file2.txt", WriteMode.OVERWRITE).setParallelism(1);
+			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism);
+//			.writeAsText("~/text_file2.txt", WriteMode.OVERWRITE).setParallelism(1);
 
 		env.execute("Stream processor");
 
