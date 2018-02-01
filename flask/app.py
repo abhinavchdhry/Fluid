@@ -12,12 +12,12 @@ from random import sample
 app = Flask(__name__)
 
 ## Setup connection to cassandra
-cluster = Cluster(['10.0.0.6', '10.0.0.7'])
-session = cluster.connect()
+#cluster = Cluster(['10.0.0.6', '10.0.0.7'])
+#session = cluster.connect()
 
-prepared_query = session.prepare("""SELECT body FROM FINAL.MESSAGES WHERE thread_id = ? AND parent_id = ? ALLOW FILTERING""")
+#prepared_query = session.prepare("""SELECT body FROM FINAL.MESSAGES WHERE thread_id = ? AND parent_id = ? ALLOW FILTERING""")
 
-prepared_ad_query = session.prepare("""SELECT title, body FROM FINAL.ADS_TABLE WHERE id = ?""")
+#prepared_ad_query = session.prepare("""SELECT title, body FROM FINAL.ADS_TABLE WHERE id = ?""")
 
 ## Setup connection to Redis
 r = redis.StrictRedis(host='10.0.0.4', db=0)
