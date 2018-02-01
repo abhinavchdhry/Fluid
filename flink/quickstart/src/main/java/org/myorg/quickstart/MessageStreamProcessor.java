@@ -47,7 +47,7 @@ import org.apache.flink.metrics.Gauge;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.state.MapState;
-import org.apache.flink.api.common.state,MapStateDescriptor;
+import org.apache.flink.api.common.state.MapStateDescriptor;
 
 // Cassandra driver libs
 import com.datastax.driver.core.Cluster;
@@ -81,7 +81,7 @@ import java.lang.System;
 import java.io.File;
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Iterator;
 
 public class MessageStreamProcessor {
@@ -128,7 +128,7 @@ public class MessageStreamProcessor {
 
 	final String THREAD_MAP_OBJ = "THREAD_MAP";
 	final String THREAD_KEY_PREFIX = "THREAD_ID_KEY_";
-	final String THREAD_VAL_PREFIX = "THREAD_VAL_KEY_"M;
+	final String THREAD_VAL_PREFIX = "THREAD_VAL_KEY_";
 	final String AD_KEY_PREFIX = "AD_ID_KEY_";
 	final String SCORE_FIELD = "TOTAL_SCORE";
 	final String COUNT_FIELD = "TOTAL_COUNT";
@@ -185,15 +185,16 @@ public class MessageStreamProcessor {
 		}
 
 		@Override
-		public void open(Configuration config) {
-    		MapStateDescriptor<String, Tuple2<Double, Long>> descriptor =
-            	new MapStateDescriptor<>(
-                    "adscorestate", 											// the state name
-                    TypeInformation.of(new TypeHint<String>() {}),
-                    TypeInformation.of(new TypeHint<Tuple2<Double, Long>>() {}) ); // type information
-    		adscorestate = getRuntimeContext().getState(descriptor);
+		public void open(Configuration config) throws Exception {
 
-    		// Load ads data
+	    		MapStateDescriptor<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>> descriptor =
+        	    	new MapStateDescriptor<>(
+                	    "adscorestate", 											// the state name
+                    		TypeInformation.of(new TypeHint<String>() {}),
+                    		TypeInformation.of(new TypeHint<Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>>() {}) ); // type information
+    			adscorestate = getRuntimeContext().getMapState(descriptor);
+
+    			// Load ads data
 			Jedis jedisAds = JedisAdsReader.getInstance().getHandle();	// Read ads from this 
 
 			if (jedisAds.exists(ADS_TABLE)) {
@@ -426,7 +427,7 @@ public class MessageStreamProcessor {
 		stream.map(new JsonToMessageObjectMapper()).setParallelism(parallelism)
 			.keyBy("thread_id")
 			.map(new MessageToDummyTuple7Map()).setParallelism(parallelism)
-			.map(new MessageAdProcessor()).setParallelism(parallelism)
+			.map(new MessageAdProcessorStateful()).setParallelism(parallelism)
 			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism);
 
 		env.execute("Stream processor");
