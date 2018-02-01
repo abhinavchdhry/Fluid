@@ -26,7 +26,10 @@ echo "Loading 10 ads..."
 python ~/Fluid/redis/load_ads_data_to_redis.py 10
 echo "Done"
 
-echo "Submitting Flink job..."
+echo "Building Flink jar..."
+mvn install -Pbuild-jar -f /home/ubuntu/Fluid/flink/quickstart/pom.xml
+
+echo "Running Flink job..."
 /usr/local/flink/bin/flink run -c org.myorg.quickstart.MessageStreamProcessor ~/Fluid/flink/quickstart/target/quickstart-0.1.jar
 
 wait
