@@ -186,6 +186,8 @@ public class MessageStreamProcessor {
 					}
 				}
 
+				// Close to return to pool
+				JedisAdsReader.getInstance().returnHandle(jedisAds);
 			}
 
 			it = adscorestate.iterator();
