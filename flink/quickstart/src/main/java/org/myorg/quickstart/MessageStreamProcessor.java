@@ -154,6 +154,40 @@ public class MessageStreamProcessor {
 
 			Iterator<Map.Entry<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>>> it = adscorestate.iterator();
 
+			// If the map has no ads loaded, load it now
+			if (!it.hasNext()) {
+
+				Jedis jedisAds = JedisAdsReader.getInstance().getHandle();	// Read ads from this 
+
+				if (jedisAds.exists(ADS_TABLE)) {
+					Long len = jedisAds.llen(ADS_TABLE);
+
+					// Loop
+					for (Long i = new Long(0); i < len; i++) {
+						String ad_obj_key = jedisAds.lindex(ADS_TABLE, i.longValue());
+
+						if (!ad_obj_key.startsWith(ADS_TABLE_KEY_PREFIX)) {
+							System.out.println("AD object prefix is not valid!!!");
+						}
+
+						String ad_id = ad_obj_key.substring(ADS_TABLE_KEY_PREFIX.length());
+
+						if (jedisAds.exists(ad_obj_key) && jedisAds.llen(ad_obj_key) == new Integer(3).longValue()) {
+							String ad_title = jedisAds.lindex(ad_obj_key, new Integer(0).longValue());
+							String ad_body = jedisAds.lindex(ad_obj_key, new Integer(1).longValue());
+							String ad_tags = jedisAds.lindex(ad_obj_key, new Integer(2).longValue());
+
+							Tuple3<String, String, String> ad_data = new Tuple3<>(ad_title, ad_body, ad_tags);
+							Tuple2<Double, Long> ad_meta = new Tuple2<>(new Double(0), new Long(0));
+							Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>> entry = new Tuple2<>(ad_data, ad_meta);
+
+							adscorestate.put(ad_id, entry);
+						}
+					}
+				}
+
+			}
+
 			while (it.hasNext()) {
 
 				Map.Entry<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>> entry = it.next();
@@ -199,34 +233,6 @@ public class MessageStreamProcessor {
     			adscorestate = getRuntimeContext().getMapState(descriptor);
 
     			// Load ads data
-			Jedis jedisAds = JedisAdsReader.getInstance().getHandle();	// Read ads from this 
-
-			if (jedisAds.exists(ADS_TABLE)) {
-				Long len = jedisAds.llen(ADS_TABLE);
-
-				// Loop
-				for (Long i = new Long(0); i < len; i++) {
-					String ad_obj_key = jedisAds.lindex(ADS_TABLE, i.longValue());
-
-					if (!ad_obj_key.startsWith(ADS_TABLE_KEY_PREFIX)) {
-						System.out.println("AD object prefix is not valid!!!");
-					}
-
-					String ad_id = ad_obj_key.substring(ADS_TABLE_KEY_PREFIX.length());
-
-					if (jedisAds.exists(ad_obj_key) && jedisAds.llen(ad_obj_key) == new Integer(3).longValue()) {
-						String ad_title = jedisAds.lindex(ad_obj_key, new Integer(0).longValue());
-						String ad_body = jedisAds.lindex(ad_obj_key, new Integer(1).longValue());
-						String ad_tags = jedisAds.lindex(ad_obj_key, new Integer(2).longValue());
-
-						Tuple3<String, String, String> ad_data = new Tuple3<>(ad_title, ad_body, ad_tags);
-						Tuple2<Double, Long> ad_meta = new Tuple2<>(new Double(0), new Long(0));
-						Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>> entry = new Tuple2<>(ad_data, ad_meta);
-
-						adscorestate.put(ad_id, entry);
-					}
-				}
-			}
 
 		}
 
