@@ -44,8 +44,15 @@ class Generator(object):
 
 
 PATH = '/home/ubuntu/Fluid/data/reddit/'
-TOPICNAME = 'COMMENTS11'
-TOPICNAME = 'jsontest22'
+#TOPICNAME = 'COMMENTS11'
+#TOPICNAME = 'jsontest22'
+
+kafkatopicfile = open('/home/ubuntu/Fluid/kafka/kafkatopicname', 'r')
+for line in kafkatopicfile:
+	break
+TOPICNAME = line
+print("KafkaProducer: Topic name is: ", TOPICNAME)
+print("\n")
 
 ### Custom partition function ensures all Reddit comments in the same thread (link_id)
 ### is sent to same partition. customKeyFunc(record) returns the least signficant byte of the link_id
