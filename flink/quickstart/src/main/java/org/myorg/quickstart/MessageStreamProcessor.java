@@ -76,10 +76,13 @@ import java.util.ArrayList;
 import java.lang.Long;
 import java.lang.Integer;
 import java.lang.System;
+import java.io.File;
+import java.io.BufferedReader;
+import java.io.FileReader;
 
 public class MessageStreamProcessor {
 
-	final static String TOPICNAME = "jsontest22";
+//	final static String TOPICNAME = "jsontest22";
 
 	public final class JsonToMessageObjectMapper implements MapFunction<ObjectNode, MessageObject> {
 		@Override
@@ -100,7 +103,7 @@ public class MessageStreamProcessor {
 		}
 	}
 
-	private static FlinkKafkaConsumer09[] getConsumerGroup(Integer numConsumers, String groupId) {
+/*	private static FlinkKafkaConsumer09[] getConsumerGroup(Integer numConsumers, String groupId) {
 		Properties properties = new Properties();
 		properties.setProperty("bootstrap.servers", "localhost:9092");
 		properties.setProperty("zookeeper.connect", "localhost:2181");
@@ -114,6 +117,7 @@ public class MessageStreamProcessor {
 
 		return (consumers);
 	}
+*/
 
 	final String ADS_TABLE_KEY_PREFIX = "AD_KEY_PREFIX_";
 	final String ADS_TABLE = "REDIS_ADS_TABLE";
@@ -306,6 +310,12 @@ public class MessageStreamProcessor {
 		// set up the execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
+		File f = new File("/home/ubuntu/Fluid/kafka/kafkatopicname");
+		FileReader fileReader = new FileReader(f);
+		BufferedReader bufferedReader = new BufferedReader(fileReader);
+		String TOPICNAME = bufferedReader.readLine();
+		System.out.println("TOPICNAME is: " + TOPICNAME);
+
 // 		env.getConfig().setLatencyTrackingInterval(new Double(0.1).longValue());
 
                 Properties properties = new Properties();
@@ -321,7 +331,6 @@ public class MessageStreamProcessor {
 			.map(new MessageToDummyTuple7Map()).setParallelism(parallelism)
 			.map(new MessageAdProcessor()).setParallelism(parallelism)
 			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism);
-//			.writeAsText("~/text_file2.txt", WriteMode.OVERWRITE).setParallelism(1);
 
 		env.execute("Stream processor");
 
