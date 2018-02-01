@@ -50,7 +50,7 @@ PATH = '/home/ubuntu/Fluid/data/reddit/'
 kafkatopicfile = open('/home/ubuntu/Fluid/kafka/kafkatopicname', 'r')
 for line in kafkatopicfile:
 	break
-TOPICNAME = line
+TOPICNAME = line.strip()
 print("KafkaProducer: Topic name is: ", TOPICNAME)
 print("\n")
 

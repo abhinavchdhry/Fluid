@@ -1,5 +1,12 @@
 # Clear current kafka topic
-topic=jsontest22
+topic=$1
+if [ -z $1 ]
+then
+	echo "Argument empty: Needs a topicname"
+	exit 1
+fi
+
+echo "Topic name is: " $1
 
 echo $topic > /home/ubuntu/Fluid/kafka/kafkatopicname
 
@@ -30,6 +37,6 @@ echo "Building Flink jar..."
 mvn install -Pbuild-jar -f /home/ubuntu/Fluid/flink/quickstart/pom.xml
 
 echo "Running Flink job..."
-/usr/local/flink/bin/flink run -c org.myorg.quickstart.MessageStreamProcessor ~/Fluid/flink/quickstart/target/quickstart-0.1.jar
+/usr/local/flink/bin/flink run -c org.myorg.quickstart.MessageStreamProcessor ~/Fluid/flink/quickstart/target/quickstart-0.1.jar &
 
 wait
