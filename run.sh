@@ -1,8 +1,8 @@
 # Clear current kafka topic
 topic=$1
-if [ -z $1 ]
+if [ $# -ne 2 ]
 then
-	echo "Argument empty: Needs a topicname"
+	echo "Needs 2 arguments: topicname and Flink job parallelism"
 	exit 1
 fi
 
@@ -37,6 +37,6 @@ python ~/Fluid/kafka/producer.py &
 echo "Done"
 
 echo "Running Flink job..."
-/usr/local/flink/bin/flink run -c org.myorg.quickstart.MessageStreamProcessor ~/Fluid/flink/quickstart/target/quickstart-0.1.jar &
+/usr/local/flink/bin/flink run -p $2 -c org.myorg.quickstart.MessageStreamProcessor ~/Fluid/flink/quickstart/target/quickstart-0.1.jar &
 
 wait

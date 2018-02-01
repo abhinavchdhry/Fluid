@@ -188,6 +188,8 @@ public class MessageStreamProcessor {
 
 			}
 
+			it = adscorestate.iterator();
+			
 			while (it.hasNext()) {
 
 				Map.Entry<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>> entry = it.next();
@@ -424,21 +426,17 @@ public class MessageStreamProcessor {
 		String TOPICNAME = bufferedReader.readLine().trim();
 		System.out.println("TOPICNAME is: " + TOPICNAME);
 
-// 		env.getConfig().setLatencyTrackingInterval(new Double(0.1).longValue());
-
                 Properties properties = new Properties();
                 properties.setProperty("bootstrap.servers", "10.0.0.10:9092,10.0.0.5:9092,10.0.0.11:9092");
                 properties.setProperty("group.id", "consumergroup4");
 
-		Integer parallelism = new Integer(4);
+		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>(TOPICNAME, new JSONDeserializationSchema(), properties));
 
-		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>(TOPICNAME, new JSONDeserializationSchema(), properties)).setParallelism(parallelism);
-
-		stream.map(new JsonToMessageObjectMapper()).setParallelism(parallelism)
+		stream.map(new JsonToMessageObjectMapper())
 			.keyBy("thread_id")
-//			.map(new MessageToDummyTuple7Map()).setParallelism(parallelism)
-			.map(new MessageAdProcessorStateful()).setParallelism(parallelism)
-			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism);
+//			.map(new MessageToDummyTuple7Map())
+			.map(new MessageAdProcessorStateful())
+			.map(new OutputToRedisPublisherMap());
 
 		env.execute("Stream processor");
 
