@@ -92,18 +92,21 @@ public class MessageStreamProcessor {
 		@Override
 		public MessageObject map(ObjectNode obj) throws Exception {
 			
-			String id = obj.has("id") ? obj.get("id").asText() : "";
-			String thread_id = obj.has("link_id") ? obj.get("link_id").asText() : "";
-			String author_id = obj.has("author_id") ? obj.get("author_id").asText() : "";
-			String score = obj.has("score") ? obj.get("score").asText() : "0";
-			String parent_id = obj.has("parent_id") ? obj.get("parent_id").asText() : "";
-			String subreddit_id = obj.has("subreddit_id") ? obj.get("subreddit_id").asText() : "";
-			String body = obj.has("body") ? obj.get("body").asText() : "";
+			MessageObject outobj = new MessageObject();
+
+			outobj.id = obj.has("id") ? obj.get("id").asText() : "";
+			outobj.thread_id = obj.has("link_id") ? obj.get("link_id").asText() : "";
+			outobj.author_id = obj.has("author_id") ? obj.get("author_id").asText() : "";
+			outobj.score = Integer.valueOf(obj.has("score") ? obj.get("score").asText() : "0");
+			outobj.parent_id = obj.has("parent_id") ? obj.get("parent_id").asText() : "";
+			outobj.subreddit_id = obj.has("subreddit_id") ? obj.get("subreddit_id").asText() : "";
+			outobj.body = obj.has("body") ? obj.get("body").asText() : "";
 
 			// Write messages to Redis cache and PubSub queue
-			JedisMessageWriter.getInstance().writeMessage(id, thread_id, parent_id, subreddit_id, author_id, body, score);
+			JedisMessageWriter.getInstance().writeMessage(outobj.id, outobj.thread_id, outobj.parent_id, outobj.subreddit_id, outobj.author_id, outobj.body, outobj.score.toString());
 
-			return new MessageObject(id, thread_id, author_id, Integer.valueOf(score), parent_id, subreddit_id, body);
+//			return new MessageObject(id, thread_id, author_id, Integer.valueOf(score), parent_id, subreddit_id, body);
+			return outobj;
 		}
 	}
 
@@ -135,15 +138,16 @@ public class MessageStreamProcessor {
 	final String CACHED_OBJ_PREFIX = "CACHED_OBJ_";
 
 
-	public class MessageAdProcessorStateful extends RichMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple2<String, String>> {
+//	public class MessageAdProcessorStateful extends RichMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple2<String, String>> {
+	public class MessageAdProcessorStateful extends RichMapFunction<MessageObject, Tuple2<String, String>> {
 
 		private transient MapState<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>> adscorestate;
 
 		@Override
-		public Tuple2<String, String> map(Tuple7<String, String, String, String, String, String, String> in) throws Exception {
+		public Tuple2<String, String> map(MessageObject in) throws Exception {
 			
-			String msg_thread_id = in.f1;
-			String msg_text = in.f2;
+			String msg_thread_id = in.thread_id;
+			String msg_text = in.body;
 
 			String best_ad = "";
 			Double best_score = new Double(-1);
@@ -426,7 +430,7 @@ public class MessageStreamProcessor {
 
 		stream.map(new JsonToMessageObjectMapper()).setParallelism(parallelism)
 			.keyBy("thread_id")
-			.map(new MessageToDummyTuple7Map()).setParallelism(parallelism)
+//			.map(new MessageToDummyTuple7Map()).setParallelism(parallelism)
 			.map(new MessageAdProcessorStateful()).setParallelism(parallelism)
 			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism);
 

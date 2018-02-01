@@ -37,7 +37,7 @@ public final class MessageObject {
 	public String body;		// Body of the comment
 
 	public MessageObject() {};
-	public MessageObject(String _id, String _thread_id, String _author_id, Integer _score, String _parent_id, String _subreddit_id, String _body) 
+/*	public MessageObject(String _id, String _thread_id, String _author_id, Integer _score, String _parent_id, String _subreddit_id, String _body) 
 	{ 
 		id = _id;
 		thread_id = _thread_id;
@@ -63,5 +63,6 @@ public final class MessageObject {
 	public String toString() {
 		return new String(id + ", " + thread_id + ", " + body);
 	}
+*/
 };
 
