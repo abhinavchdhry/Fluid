@@ -313,7 +313,7 @@ public class MessageStreamProcessor {
 		File f = new File("/home/ubuntu/Fluid/kafka/kafkatopicname");
 		FileReader fileReader = new FileReader(f);
 		BufferedReader bufferedReader = new BufferedReader(fileReader);
-		String TOPICNAME = bufferedReader.readLine();
+		String TOPICNAME = bufferedReader.readLine().trim();
 		System.out.println("TOPICNAME is: " + TOPICNAME);
 
 // 		env.getConfig().setLatencyTrackingInterval(new Double(0.1).longValue());
