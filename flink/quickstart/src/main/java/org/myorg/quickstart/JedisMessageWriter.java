@@ -1,25 +1,35 @@
 package org.myorg.quickstart;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
 
 public class JedisMessageWriter {
 	private static Jedis jedis;
 	private static JedisMessageWriter jedis_handle;
+	private static JedisPool jedis_pool;
 
 	private static final String MESSAGES_DB_NAME = "REDIS_MESSAGES_DB";
 
 	private JedisMessageWriter() { }
 
-	public static JedisMessageWriter getInstance() {
-		if (jedis == null) {
+	public synchronized static JedisMessageWriter getInstance() {
+		if (jedis_handle == null) {
 			jedis_handle = new JedisMessageWriter();
-			jedis = new Jedis("10.0.0.4", 6379);
+			JedisPoolConfig poolConfig = new JedisPoolConfig();
+			poolConfig.setMaxTotal(1024);
+			jedis_pool = new JedisPool(poolConfig, "10.0.0.4");
+//			jedis = new Jedis("10.0.0.4", 6379);
 		}
 		return jedis_handle;
 	}
 
 	public static Jedis getHandle() {
-		return jedis;
+		return jedis_pool.getResource();
+	}
+
+	public static void returnHandle(Jedis jedis) {
+		jedis_pool.returnResource(jedis);
 	}
 
 	public static String getMessagesDBName() {
@@ -36,5 +46,8 @@ public class JedisMessageWriter {
 		j.lpush("THREAD_MSG_MAP_" + link_id, "MESSAGE_OBJ_" + id);
 
 		j.publish("THREAD_CHANNEL_" + link_id, body);
+
+		getInstance().returnHandle(j);
 	}
 }
+

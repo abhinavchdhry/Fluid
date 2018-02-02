@@ -69,7 +69,6 @@ import redis.clients.jedis.Jedis;
 // Local project libs
 import org.myorg.quickstart.MessageObject;
 import org.myorg.quickstart.JedisHandle;
-//import org.myorg.quickstart.CassandraSession;
 import org.myorg.quickstart.PublisherJedisHandle;
 import org.myorg.quickstart.JedisMessageWriter;
 import org.myorg.quickstart.NaiveSimilarity;
@@ -461,7 +460,7 @@ public class MessageStreamProcessor {
 
 		stream.map(new JsonToMessageObjectMapper())
 			.keyBy("thread_id")
-//			.map(new MessageToDummyTuple7Map())
+//			.map(new MessageToDummyTuple7Map());
 			.map(new MessageAdProcessorStateful())
 			.map(new OutputToRedisPublisherMap());
 
