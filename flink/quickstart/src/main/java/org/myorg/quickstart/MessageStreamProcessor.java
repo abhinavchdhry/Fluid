@@ -72,6 +72,7 @@ import org.myorg.quickstart.JedisHandle;
 //import org.myorg.quickstart.CassandraSession;
 import org.myorg.quickstart.PublisherJedisHandle;
 import org.myorg.quickstart.JedisMessageWriter;
+import org.myorg.quickstart.NaiveSimilarity;
 
 import info.debatty.java.stringsimilarity.Cosine;
 import java.util.ArrayList;
@@ -142,6 +143,7 @@ public class MessageStreamProcessor {
 	public class MessageAdProcessorStateful extends RichMapFunction<MessageObject, Tuple2<String, String>> {
 
 		private transient MapState<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>> adscorestate;
+		private final int RUNNING_WINDOW_LEN = 8;
 
 		@Override
 		public Tuple2<String, String> map(MessageObject in) throws Exception {
@@ -179,8 +181,8 @@ public class MessageStreamProcessor {
 
 							Tuple3<String, String, String> ad_data = new Tuple3<>(ad_title, ad_body, ad_tags);
 //							Tuple2<Double, Long> ad_meta = new Tuple2<>(new Double(0), new Long(0));
-							ArrayList<Double> windowedScores = new ArrayList<Double>(10);
-							for (int j = 0; j < 10; j++) {
+							ArrayList<Double> windowedScores = new ArrayList<Double>(RUNNING_WINDOW_LEN);
+							for (int j = 0; j < RUNNING_WINDOW_LEN; j++) {
 								windowedScores.add(new Double(0));
 							}
 
@@ -210,15 +212,24 @@ public class MessageStreamProcessor {
 				String ad_tags = ad_data.f0.f2;
 
 				ArrayList<Double> prevScores = ad_data.f1;
-				Double totalWindowedScore = ad_data.f2;
+//				Double totalWindowedScore = ad_data.f2;
 
-				Cosine cosine = new Cosine(1);
-				Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, msg_text);
+//				Cosine cosine = new Cosine(1);
+//				Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, msg_text);
+				
+				NaiveSimilarity ns = new NaiveSimilarity();
+				Double similarity = ns.computeSimilarity(ad_body, msg_text);
 
 				prevScores.add(similarity);
 				Double evicted = prevScores.remove(0);
 
-				totalWindowedScore = totalWindowedScore + similarity - evicted;
+//				totalWindowedScore = totalWindowedScore + similarity - evicted;
+				// Calculate new score based on an exponential policy
+				Double totalWindowedScore = new Double(0);
+
+				for (Integer i = 1; i <= RUNNING_WINDOW_LEN; i++) {
+					totalWindowedScore += i.doubleValue() * prevScores.get(i.intValue()-1);
+				}
 
 //				Double newScore = prevScore + similarity;
 //				count = count + 1;
