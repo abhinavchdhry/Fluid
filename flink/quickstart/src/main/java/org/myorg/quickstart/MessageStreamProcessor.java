@@ -141,7 +141,7 @@ public class MessageStreamProcessor {
 //	public class MessageAdProcessorStateful extends RichMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple2<String, String>> {
 	public class MessageAdProcessorStateful extends RichMapFunction<MessageObject, Tuple2<String, String>> {
 
-		private transient MapState<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>> adscorestate;
+		private transient MapState<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>> adscorestate;
 
 		@Override
 		public Tuple2<String, String> map(MessageObject in) throws Exception {
@@ -152,7 +152,7 @@ public class MessageStreamProcessor {
 			String best_ad = "";
 			Double best_score = new Double(-1);
 
-			Iterator<Map.Entry<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>>> it = adscorestate.iterator();
+			Iterator<Map.Entry<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>>> it = adscorestate.iterator();
 
 			// If the map has no ads loaded, load it now
 			if (!it.hasNext()) {
@@ -178,8 +178,15 @@ public class MessageStreamProcessor {
 							String ad_tags = jedisAds.lindex(ad_obj_key, new Integer(2).longValue());
 
 							Tuple3<String, String, String> ad_data = new Tuple3<>(ad_title, ad_body, ad_tags);
-							Tuple2<Double, Long> ad_meta = new Tuple2<>(new Double(0), new Long(0));
-							Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>> entry = new Tuple2<>(ad_data, ad_meta);
+//							Tuple2<Double, Long> ad_meta = new Tuple2<>(new Double(0), new Long(0));
+							ArrayList<Double> windowedScores = new ArrayList<Double>(10);
+							for (int j = 0; j < 10; j++) {
+								windowedScores.add(new Double(0));
+							}
+
+							Double total = new Double(0);
+
+							Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double> entry = new Tuple3<>(ad_data, windowedScores, total);
 
 							adscorestate.put(ad_id, entry);
 						}
@@ -194,32 +201,39 @@ public class MessageStreamProcessor {
 			
 			while (it.hasNext()) {
 
-				Map.Entry<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>> entry = it.next();
+				Map.Entry<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>> entry = it.next();
 				String ad_id = entry.getKey();
-				Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>> ad_data = entry.getValue();
+				Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double> ad_data = entry.getValue();
 
 				String ad_title = ad_data.f0.f0;
 				String ad_body = ad_data.f0.f1;
 				String ad_tags = ad_data.f0.f2;
 
-				Double prevScore = ad_data.f1.f0;
-				Long count = ad_data.f1.f1;
+				ArrayList<Double> prevScores = ad_data.f1;
+				Double totalWindowedScore = ad_data.f2;
 
 				Cosine cosine = new Cosine(1);
 				Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, msg_text);
 
-				Double newScore = prevScore + similarity;
-				count = count + 1;
+				prevScores.add(similarity);
+				Double evicted = prevScores.remove(0);
 
-				Double total = newScore/count.doubleValue();
-				if (total > best_score) {
-					best_score = total;
+				totalWindowedScore = totalWindowedScore + similarity - evicted;
+
+//				Double newScore = prevScore + similarity;
+//				count = count + 1;
+
+
+//				Double total = newScore/count.doubleValue();
+
+				if (totalWindowedScore > best_score) {
+					best_score = totalWindowedScore;
 					best_ad = ad_id;
 				}
 
 				// Update state
-				ad_data.f1.f0 = newScore;
-				ad_data.f1.f1 = count;
+				ad_data.f1 = prevScores;
+				ad_data.f2 = totalWindowedScore;
 				adscorestate.put(ad_id, ad_data);
 			}
 
@@ -229,11 +243,11 @@ public class MessageStreamProcessor {
 		@Override
 		public void open(Configuration config) throws Exception {
 
-	    		MapStateDescriptor<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>> descriptor =
+	    		MapStateDescriptor<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>> descriptor =
         	    	new MapStateDescriptor<>(
                 	    "adscorestate", 											// the state name
                     		TypeInformation.of(new TypeHint<String>() {}),
-                    		TypeInformation.of(new TypeHint<Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>>() {}) ); // type information
+                    		TypeInformation.of(new TypeHint<Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>>() {}) ); // type information
     			adscorestate = getRuntimeContext().getMapState(descriptor);
 
     			// Load ads data
