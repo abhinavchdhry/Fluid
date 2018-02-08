@@ -69,9 +69,9 @@ import redis.clients.jedis.Jedis;
 // Local project libs
 import org.myorg.quickstart.MessageObject;
 import org.myorg.quickstart.JedisHandle;
-//import org.myorg.quickstart.CassandraSession;
 import org.myorg.quickstart.PublisherJedisHandle;
 import org.myorg.quickstart.JedisMessageWriter;
+import org.myorg.quickstart.NaiveSimilarity;
 
 import info.debatty.java.stringsimilarity.Cosine;
 import java.util.ArrayList;
@@ -92,18 +92,21 @@ public class MessageStreamProcessor {
 		@Override
 		public MessageObject map(ObjectNode obj) throws Exception {
 			
-			String id = obj.has("id") ? obj.get("id").asText() : "";
-			String thread_id = obj.has("link_id") ? obj.get("link_id").asText() : "";
-			String author_id = obj.has("author_id") ? obj.get("author_id").asText() : "";
-			String score = obj.has("score") ? obj.get("score").asText() : "0";
-			String parent_id = obj.has("parent_id") ? obj.get("parent_id").asText() : "";
-			String subreddit_id = obj.has("subreddit_id") ? obj.get("subreddit_id").asText() : "";
-			String body = obj.has("body") ? obj.get("body").asText() : "";
+			MessageObject outobj = new MessageObject();
+
+			outobj.id = obj.has("id") ? obj.get("id").asText() : "";
+			outobj.thread_id = obj.has("link_id") ? obj.get("link_id").asText() : "";
+			outobj.author_id = obj.has("author_id") ? obj.get("author_id").asText() : "";
+			outobj.score = Integer.valueOf(obj.has("score") ? obj.get("score").asText() : "0");
+			outobj.parent_id = obj.has("parent_id") ? obj.get("parent_id").asText() : "";
+			outobj.subreddit_id = obj.has("subreddit_id") ? obj.get("subreddit_id").asText() : "";
+			outobj.body = obj.has("body") ? obj.get("body").asText() : "";
 
 			// Write messages to Redis cache and PubSub queue
-			JedisMessageWriter.getInstance().writeMessage(id, thread_id, parent_id, subreddit_id, author_id, body, score);
+			JedisMessageWriter.getInstance().writeMessage(outobj.id, outobj.thread_id, outobj.parent_id, outobj.subreddit_id, outobj.author_id, outobj.body, outobj.score.toString());
 
-			return new MessageObject(id, thread_id, author_id, Integer.valueOf(score), parent_id, subreddit_id, body);
+//			return new MessageObject(id, thread_id, author_id, Integer.valueOf(score), parent_id, subreddit_id, body);
+			return outobj;
 		}
 	}
 
@@ -135,49 +138,112 @@ public class MessageStreamProcessor {
 	final String CACHED_OBJ_PREFIX = "CACHED_OBJ_";
 
 
-	public class MessageAdProcessorStateful extends RichMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple2<String, String>> {
+//	public class MessageAdProcessorStateful extends RichMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple2<String, String>> {
+	public class MessageAdProcessorStateful extends RichMapFunction<MessageObject, Tuple2<String, String>> {
 
-		private transient MapState<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>> adscorestate;
+		private transient MapState<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>> adscorestate;
+		private final int RUNNING_WINDOW_LEN = 8;
 
 		@Override
-		public Tuple2<String, String> map(Tuple7<String, String, String, String, String, String, String> in) throws Exception {
+		public Tuple2<String, String> map(MessageObject in) throws Exception {
 			
-			String msg_thread_id = in.f1;
-			String msg_text = in.f2;
+			String msg_thread_id = in.thread_id;
+			String msg_text = in.body;
 
 			String best_ad = "";
 			Double best_score = new Double(-1);
 
-			Iterator<Map.Entry<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>>> it = adscorestate.iterator();
+			Iterator<Map.Entry<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>>> it = adscorestate.iterator();
 
+			// If the map has no ads loaded, load it now
+			if (!it.hasNext()) {
+
+				Jedis jedisAds = JedisAdsReader.getInstance().getHandle();	// Read ads from this 
+
+				if (jedisAds.exists(ADS_TABLE)) {
+					Long len = jedisAds.llen(ADS_TABLE);
+
+					// Loop
+					for (Long i = new Long(0); i < len; i++) {
+						String ad_obj_key = jedisAds.lindex(ADS_TABLE, i.longValue());
+
+						if (!ad_obj_key.startsWith(ADS_TABLE_KEY_PREFIX)) {
+							System.out.println("AD object prefix is not valid!!!");
+						}
+
+						String ad_id = ad_obj_key.substring(ADS_TABLE_KEY_PREFIX.length());
+
+						if (jedisAds.exists(ad_obj_key) && jedisAds.llen(ad_obj_key) == new Integer(3).longValue()) {
+							String ad_title = jedisAds.lindex(ad_obj_key, new Integer(0).longValue());
+							String ad_body = jedisAds.lindex(ad_obj_key, new Integer(1).longValue());
+							String ad_tags = jedisAds.lindex(ad_obj_key, new Integer(2).longValue());
+
+							Tuple3<String, String, String> ad_data = new Tuple3<>(ad_title, ad_body, ad_tags);
+//							Tuple2<Double, Long> ad_meta = new Tuple2<>(new Double(0), new Long(0));
+							ArrayList<Double> windowedScores = new ArrayList<Double>(RUNNING_WINDOW_LEN);
+							for (int j = 0; j < RUNNING_WINDOW_LEN; j++) {
+								windowedScores.add(new Double(0));
+							}
+
+							Double total = new Double(0);
+
+							Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double> entry = new Tuple3<>(ad_data, windowedScores, total);
+
+							adscorestate.put(ad_id, entry);
+						}
+					}
+				}
+
+				// Close to return to pool
+				JedisAdsReader.getInstance().returnHandle(jedisAds);
+			}
+
+			it = adscorestate.iterator();
+			
 			while (it.hasNext()) {
 
-				Map.Entry<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>> entry = it.next();
+				Map.Entry<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>> entry = it.next();
 				String ad_id = entry.getKey();
-				Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>> ad_data = entry.getValue();
+				Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double> ad_data = entry.getValue();
 
 				String ad_title = ad_data.f0.f0;
 				String ad_body = ad_data.f0.f1;
 				String ad_tags = ad_data.f0.f2;
 
-				Double prevScore = ad_data.f1.f0;
-				Long count = ad_data.f1.f1;
+				ArrayList<Double> prevScores = ad_data.f1;
+//				Double totalWindowedScore = ad_data.f2;
 
-				Cosine cosine = new Cosine(1);
-				Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, msg_text);
+//				Cosine cosine = new Cosine(1);
+//				Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, msg_text);
+				
+				NaiveSimilarity ns = new NaiveSimilarity();
+				Double similarity = ns.computeSimilarity(ad_body, msg_text);
 
-				Double newScore = prevScore + similarity;
-				count = count + 1;
+				prevScores.add(similarity);
+				Double evicted = prevScores.remove(0);
 
-				Double total = newScore/count.doubleValue();
-				if (total > best_score) {
-					best_score = total;
+//				totalWindowedScore = totalWindowedScore + similarity - evicted;
+				// Calculate new score based on an exponential policy
+				Double totalWindowedScore = new Double(0);
+
+				for (Integer i = 1; i <= RUNNING_WINDOW_LEN; i++) {
+					totalWindowedScore += i.doubleValue() * prevScores.get(i.intValue()-1);
+				}
+
+//				Double newScore = prevScore + similarity;
+//				count = count + 1;
+
+
+//				Double total = newScore/count.doubleValue();
+
+				if (totalWindowedScore > best_score) {
+					best_score = totalWindowedScore;
 					best_ad = ad_id;
 				}
 
 				// Update state
-				ad_data.f1.f0 = newScore;
-				ad_data.f1.f1 = count;
+				ad_data.f1 = prevScores;
+				ad_data.f2 = totalWindowedScore;
 				adscorestate.put(ad_id, ad_data);
 			}
 
@@ -187,42 +253,14 @@ public class MessageStreamProcessor {
 		@Override
 		public void open(Configuration config) throws Exception {
 
-	    		MapStateDescriptor<String, Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>> descriptor =
+	    		MapStateDescriptor<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>> descriptor =
         	    	new MapStateDescriptor<>(
                 	    "adscorestate", 											// the state name
                     		TypeInformation.of(new TypeHint<String>() {}),
-                    		TypeInformation.of(new TypeHint<Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>>>() {}) ); // type information
+                    		TypeInformation.of(new TypeHint<Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>>() {}) ); // type information
     			adscorestate = getRuntimeContext().getMapState(descriptor);
 
     			// Load ads data
-			Jedis jedisAds = JedisAdsReader.getInstance().getHandle();	// Read ads from this 
-
-			if (jedisAds.exists(ADS_TABLE)) {
-				Long len = jedisAds.llen(ADS_TABLE);
-
-				// Loop
-				for (Long i = new Long(0); i < len; i++) {
-					String ad_obj_key = jedisAds.lindex(ADS_TABLE, i.longValue());
-
-					if (!ad_obj_key.startsWith(ADS_TABLE_KEY_PREFIX)) {
-						System.out.println("AD object prefix is not valid!!!");
-					}
-
-					String ad_id = ad_obj_key.substring(ADS_TABLE_KEY_PREFIX.length());
-
-					if (jedisAds.exists(ad_obj_key) && jedisAds.llen(ad_obj_key) == new Integer(3).longValue()) {
-						String ad_title = jedisAds.lindex(ad_obj_key, new Integer(0).longValue());
-						String ad_body = jedisAds.lindex(ad_obj_key, new Integer(1).longValue());
-						String ad_tags = jedisAds.lindex(ad_obj_key, new Integer(2).longValue());
-
-						Tuple3<String, String, String> ad_data = new Tuple3<>(ad_title, ad_body, ad_tags);
-						Tuple2<Double, Long> ad_meta = new Tuple2<>(new Double(0), new Long(0));
-						Tuple2<Tuple3<String, String, String>, Tuple2<Double, Long>> entry = new Tuple2<>(ad_data, ad_meta);
-
-						adscorestate.put(ad_id, entry);
-					}
-				}
-			}
 
 		}
 
@@ -414,21 +452,17 @@ public class MessageStreamProcessor {
 		String TOPICNAME = bufferedReader.readLine().trim();
 		System.out.println("TOPICNAME is: " + TOPICNAME);
 
-// 		env.getConfig().setLatencyTrackingInterval(new Double(0.1).longValue());
-
                 Properties properties = new Properties();
                 properties.setProperty("bootstrap.servers", "10.0.0.10:9092,10.0.0.5:9092,10.0.0.11:9092");
                 properties.setProperty("group.id", "consumergroup4");
 
-		Integer parallelism = new Integer(4);
+		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>(TOPICNAME, new JSONDeserializationSchema(), properties));
 
-		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>(TOPICNAME, new JSONDeserializationSchema(), properties)).setParallelism(parallelism);
-
-		stream.map(new JsonToMessageObjectMapper()).setParallelism(parallelism)
+		stream.map(new JsonToMessageObjectMapper())
 			.keyBy("thread_id")
-			.map(new MessageToDummyTuple7Map()).setParallelism(parallelism)
-			.map(new MessageAdProcessorStateful()).setParallelism(parallelism)
-			.map(new OutputToRedisPublisherMap()).setParallelism(parallelism);
+//			.map(new MessageToDummyTuple7Map());
+			.map(new MessageAdProcessorStateful())
+			.map(new OutputToRedisPublisherMap());
 
 		env.execute("Stream processor");
 

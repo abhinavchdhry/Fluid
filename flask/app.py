@@ -3,7 +3,6 @@ from flask import render_template
 from flask import g
 from flask import jsonify
 from flask import Response
-from cassandra.cluster import Cluster
 import time
 import redis
 import json
@@ -11,13 +10,6 @@ from random import sample
 
 app = Flask(__name__)
 
-## Setup connection to cassandra
-#cluster = Cluster(['10.0.0.6', '10.0.0.7'])
-#session = cluster.connect()
-
-#prepared_query = session.prepare("""SELECT body FROM FINAL.MESSAGES WHERE thread_id = ? AND parent_id = ? ALLOW FILTERING""")
-
-#prepared_ad_query = session.prepare("""SELECT title, body FROM FINAL.ADS_TABLE WHERE id = ?""")
 
 ## Setup connection to Redis
 r = redis.StrictRedis(host='10.0.0.4', db=0)
@@ -25,9 +17,6 @@ r = redis.StrictRedis(host='10.0.0.4', db=0)
 
 @app.route('/')
 def entry():
-#	query = """SELECT * FROM FINAL.OUTPUT_TABLE LIMIT 50"""
-#	results = session.execute(query)
-#	threads = r.keys("THREAD_MSG_MAP_*")
 
 	curMatches = r.keys("MATCH_*")
 
@@ -46,26 +35,36 @@ def entry():
 			out[thread_id] = body
 	
 	### FOR DEMO: fixed thread
-	fixed_id = 't3_1v0vw'
-        msg_obj1 = r.lindex("THREAD_MSG_MAP_" + fixed_id, 0)
+	out = {}
+	fixed_id = 't3_sample'
+#        msg_obj1 = r.lindex("THREAD_MSG_MAP_" + fixed_id, 0)
 
-	fixed_obj = {}
-        body1 = r.lindex(msg_obj1, 4).decode('utf-8')
-        if '[removed]' not in body1 and '[deleted]' not in body1:
-		fixed_obj["id"] = fixed_id
-        	fixed_obj["body"] = body1
+#	fixed_obj = {}
+#        body1 = r.lindex(msg_obj1, 4).decode('utf-8')
+#        if '[removed]' not in body1 and '[deleted]' not in body1:
+#		fixed_obj["id"] = fixed_id
+#        	fixed_obj["body"] = body1
 
-	print(out)
-	print(fixed_obj)
+#	print(out)
+#	print(fixed_obj)
+	fixed_obj = {'id':fixed_id, 'body':'Click here to view demo conversation'}
+
 	return render_template('index.html', result=out, fixed=fixed_obj)
 
 @app.route('/<thread_id>')
 def show_thread(thread_id):
 #	result = session.execute("""SELECT * FROM FINAL.MESSAGES WHERE thread_id = %s""", [thread_id])
 	body = {}
-	numMessagesInThread = r.llen("THREAD_MSG_MAP_" + thread_id)
+	numMessagesInThread = r.scard("THREAD_MSG_MAP_" + thread_id)
+
+	# Bug fix: Load only 100 messages for this thread when numMessagesInThread exceeds 100
+	# otherwise page does not load
+	numMessagesInThread = min(numMessagesInThread, 100)
+
+	messages = r.srandmember("THREAD_MSG_MAP_" + thread_id, numMessagesInThread)
+
 	for i in range(numMessagesInThread):
-		msg_key = r.lindex("THREAD_MSG_MAP_" + thread_id, i)
+		msg_key = messages[i]
 		msg_id = msg_key[12:]
 		msg_author = r.lindex(msg_key, 3).decode('utf-8')
 		msg_author = 'Anonymous' if msg_author.strip() == '' else msg_author.title()
@@ -92,8 +91,8 @@ def comment_stream_source(thread_id):
 	subscriber.subscribe(subscribe_channel)
 	for msg in subscriber.listen():
 		if msg['type'] == 'message':
-			print("msg rcvd...")
-			print(msg['data'])
+#			print("msg rcvd...")
+#			print(msg['data'])
 			yield "data: %s\n\n" % msg['data']
 
 
@@ -108,7 +107,12 @@ def ad_stream_source(thread_id):
 	ad_subscribe_channel = "AD_CHANNEL_" + thread_id
 	print("Subscribing to: ", ad_subscribe_channel)
         ad_subscriber.subscribe(ad_subscribe_channel)
+	last_msg_time = None
 	for msg in ad_subscriber.listen():
+		if last_msg_time is None or (time.time() - last_msg_time) > 2:
+			last_msg_time = time.time()
+		else:
+			continue
 		if msg['type'] == 'message':
 			matched_ad_id = msg['data']
 			print("Matched ad: " + matched_ad_id)

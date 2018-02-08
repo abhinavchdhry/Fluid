@@ -46,7 +46,7 @@
 				{{ results[key].body }}
 			</div>
 			
-			<div class="chip" alt="">
+			<div class="chip" alt="Anonymous">
 				{{ results[key].author }}
 			</div>
 		</div>
@@ -77,14 +77,14 @@ $(".comment").unbind().click(
 		if (e.type == "message") {
 			console.log(e.data);
 
-			var obj = JSON.parse(e.data);
+//			var obj = JSON.parse(e.data);
 		
 			console.log("Msg rcvd...");
 			var newComment = $("<div>", { "class":"comment1" });
 
 //			var newCommentText = $("<p class='comment-text' style='color:black'>".concat(e.data).concat("</p>"));
 			var newCommentText = $(
-		                "<div class='message-wrapper them'><div class='circle-wrapper animated bounceIn'><img src=\"{{ url_for('static', filename='stylesheets/common.png') }}\" style=\"max-width: 100%;\"></div><div class='text-wrapper animated fadeIn'>".concat(obj.body).concat("</div><div class='chip' alt=''>").concat(obj.author).concat("</div></div>")
+		                "<div class='message-wrapper them'><div class='circle-wrapper animated bounceIn'><img src=\"{{ url_for('static', filename='stylesheets/common.png') }}\" style=\"max-width: 100%;\"></div><div class='text-wrapper animated fadeIn'>".concat(e.data).concat("</div><div class='chip' alt='Anonymous'>").concat("Anonymous</div></div>")
 			);
 			newComment.append(newCommentText);
 
@@ -178,7 +178,7 @@ adSource.onmessage = function(e) {
 			adimage.innerHTML = "";
 		}
 
-		$("#ad").effect("highlight", {}, 1000);
+//		$("#ad").effect("highlight", {}, 1000);
 	}
 };
 
