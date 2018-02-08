@@ -1,11 +1,7 @@
-#from cassandra.cluster import Cluster
 import json
 import redis
 import sys
 from random import sample
-
-#cluster = Cluster()
-#session = cluster.connect()
 
 if len(sys.argv) != 2:
 	print("Needs an argument: Number of records to load")
@@ -15,9 +11,9 @@ N = int(sys.argv[1])
 
 r = redis.StrictRedis(host='10.0.0.4', port=6379, db=0)
 
-# Main code
-#query = """SELECT * FROM ads.ads_table"""
-#results = session.execute(query)
+# Flush all existing keys here
+r.flushall()
+
 
 REDIS_TABLE_NAME = "REDIS_ADS_TABLE"
 

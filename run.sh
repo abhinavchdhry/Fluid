@@ -11,11 +11,8 @@ echo "Topic name is: " $1
 echo $topic > /home/ubuntu/Fluid/kafka/kafkatopicname
 
 # Clean Redis data
-echo "Flushing Redis tables..."
-python ~/Fluid/redis/clear_cached_redis_tables.py
-echo "Done"
-echo "Loading 10 ads..."
-python ~/Fluid/redis/load_ads_data_to_redis.py 10
+echo "Flushing Redis keys and loading ads..."
+python ~/Fluid/redis/load_ads_data_to_redis.py 26
 echo "Done"
 
 echo "Starting kafka producer..."
