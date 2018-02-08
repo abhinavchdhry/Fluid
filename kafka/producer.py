@@ -21,6 +21,7 @@ class Generator(object):
 			fh = open(filepath,'r')
 			file_in_mem = [line for line in fh]
 			print("Done.")
+			fh.close()
 		except:
 			print("Error opening file: " + filepath + "!")
 			return
@@ -39,8 +40,10 @@ class Generator(object):
 
 	def start(self):
 		files = os.listdir(self._filepath)
-		for _f in files:
-			self._processFile(self._filepath + _f)
+		files = ['final.aug']
+		while 1:
+			for _f in files:
+				self._processFile(self._filepath + _f)
 
 
 PATH = '/home/ubuntu/Fluid/data/reddit/'

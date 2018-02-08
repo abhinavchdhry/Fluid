@@ -25,7 +25,7 @@ count = 0
 AD_PREFIX = "AD_KEY_PREFIX_"
 
 # Load data into memory
-f = open('/home/ubuntu/Fluid/data/ads/chicago.data', 'r')
+f = open('/home/ubuntu/Fluid/data/all.ads', 'r')
 ads = [line for line in f]
 
 selected = sample(ads, N)
