@@ -29,15 +29,10 @@
     </div>
   </nav>
 
-<!--- <p style="color:black" id="comment-thread-header"> This is the comment thread </p> -->
 
 <div id="comment-thread">
 
 	{% for key in results %}
-<!--        <div class="comment" id="{{ key }}">
-                <p class="comment-text" style="color:black"> {{ results[key] }} </p>
-        </div>
--->
 
 	<div class="comment1" id="{{ key }}">
 		<div class="message-wrapper them">
@@ -77,12 +72,9 @@ $(".comment").unbind().click(
 		if (e.type == "message") {
 			console.log(e.data);
 
-//			var obj = JSON.parse(e.data);
-		
 			console.log("Msg rcvd...");
 			var newComment = $("<div>", { "class":"comment1" });
 
-//			var newCommentText = $("<p class='comment-text' style='color:black'>".concat(e.data).concat("</p>"));
 			var newCommentText = $(
 		                "<div class='message-wrapper them'><div class='circle-wrapper animated bounceIn'><img src=\"{{ url_for('static', filename='stylesheets/common.png') }}\" style=\"max-width: 100%;\"></div><div class='text-wrapper animated fadeIn'>".concat(e.data).concat("</div><div class='chip' alt='Anonymous'>").concat("Anonymous</div></div>")
 			);
@@ -100,14 +92,6 @@ $(".comment").unbind().click(
 <div id="ad-display">
 	
 	<div id="ad">
-<!--		<div id="ad-title">
-			{{ matched_ad.title }}
-		</div>
-
-		<div id="ad-body">
-			{{ matched_ad.body }}
-		</div>
--->		
 	<p style="text-align:center;"> Fluid Ad </p>
   <div class="row">
       <div class="card">
@@ -177,8 +161,6 @@ adSource.onmessage = function(e) {
 		else {
 			adimage.innerHTML = "";
 		}
-
-//		$("#ad").effect("highlight", {}, 1000);
 	}
 };
 

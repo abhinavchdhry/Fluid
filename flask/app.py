@@ -1,7 +1,5 @@
 from flask import Flask
 from flask import render_template
-from flask import g
-from flask import jsonify
 from flask import Response
 import time
 import redis
@@ -24,10 +22,8 @@ def entry():
 		curMatches = sample(curMatches, 25)
 
 	out = {}
-#	for row in results:
 	for match in curMatches:
 		thread_id = match[len('MATCH_'):]
-#		res = session.execute(prepared_query, [thread_id, thread_id])
 		msg_obj = r.lindex("THREAD_MSG_MAP_" + thread_id, 0)
 	
 		body = r.lindex(msg_obj, 4).decode('utf-8')
@@ -37,23 +33,12 @@ def entry():
 	### FOR DEMO: fixed thread
 	out = {}
 	fixed_id = 't3_sample'
-#        msg_obj1 = r.lindex("THREAD_MSG_MAP_" + fixed_id, 0)
-
-#	fixed_obj = {}
-#        body1 = r.lindex(msg_obj1, 4).decode('utf-8')
-#        if '[removed]' not in body1 and '[deleted]' not in body1:
-#		fixed_obj["id"] = fixed_id
-#        	fixed_obj["body"] = body1
-
-#	print(out)
-#	print(fixed_obj)
 	fixed_obj = {'id':fixed_id, 'body':'Click here to view demo conversation'}
 
 	return render_template('index.html', result=out, fixed=fixed_obj)
 
 @app.route('/<thread_id>')
 def show_thread(thread_id):
-#	result = session.execute("""SELECT * FROM FINAL.MESSAGES WHERE thread_id = %s""", [thread_id])
 	body = {}
 	numMessagesInThread = r.scard("THREAD_MSG_MAP_" + thread_id)
 
@@ -87,12 +72,10 @@ def show_thread(thread_id):
 def comment_stream_source(thread_id):
 	subscriber = r.pubsub()
 	subscribe_channel = "THREAD_CHANNEL_" + thread_id
-	print("Subscribing to: ", subscribe_channel)
+	print("Comment stream: Subscribing to: ", subscribe_channel)
 	subscriber.subscribe(subscribe_channel)
 	for msg in subscriber.listen():
 		if msg['type'] == 'message':
-#			print("msg rcvd...")
-#			print(msg['data'])
 			yield "data: %s\n\n" % msg['data']
 
 
@@ -105,7 +88,7 @@ def comment_stream(thread_id):
 def ad_stream_source(thread_id):
 	ad_subscriber = r.pubsub()
 	ad_subscribe_channel = "AD_CHANNEL_" + thread_id
-	print("Subscribing to: ", ad_subscribe_channel)
+	print("Ad stream: Subscribing to: ", ad_subscribe_channel)
         ad_subscriber.subscribe(ad_subscribe_channel)
 	last_msg_time = None
 	for msg in ad_subscriber.listen():
@@ -131,18 +114,6 @@ def ad_stream_source(thread_id):
 def ad_stream(thread_id):
 	print("Ad stream started...")
 	return Response(ad_stream_source(thread_id), mimetype="text/event-stream")
-
-#@app.before_request
-#def before_request():
-	## Setup connection to cassandra
-#	g.cluster = Cluster(['10.0.0.6', '10.0.0.7'])
-#	g.session = g.cluster.connect()
-
-#@app.after_request
-#def after_request(response):
-	# Shutdown the session
-#	g.cluster.shutdown()
-#	return response
 
 if __name__ == '__main__':
 	app.debug = True
