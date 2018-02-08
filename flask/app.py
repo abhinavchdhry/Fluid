@@ -35,7 +35,8 @@ def entry():
 			out[thread_id] = body
 	
 	### FOR DEMO: fixed thread
-#	fixed_id = 't3_1v0vw'
+	out = {}
+	fixed_id = 't3_sample'
 #        msg_obj1 = r.lindex("THREAD_MSG_MAP_" + fixed_id, 0)
 
 #	fixed_obj = {}
@@ -44,9 +45,9 @@ def entry():
 #		fixed_obj["id"] = fixed_id
 #        	fixed_obj["body"] = body1
 
-	print(out)
+#	print(out)
 #	print(fixed_obj)
-	fixed_obj = {}
+	fixed_obj = {'id':fixed_id, 'body':'Click here to view demo conversation'}
 
 	return render_template('index.html', result=out, fixed=fixed_obj)
 
@@ -54,14 +55,16 @@ def entry():
 def show_thread(thread_id):
 #	result = session.execute("""SELECT * FROM FINAL.MESSAGES WHERE thread_id = %s""", [thread_id])
 	body = {}
-	numMessagesInThread = r.llen("THREAD_MSG_MAP_" + thread_id)
+	numMessagesInThread = r.scard("THREAD_MSG_MAP_" + thread_id)
 
 	# Bug fix: Load only 100 messages for this thread when numMessagesInThread exceeds 100
 	# otherwise page does not load
 	numMessagesInThread = min(numMessagesInThread, 100)
 
+	messages = r.srandmember("THREAD_MSG_MAP_" + thread_id, numMessagesInThread)
+
 	for i in range(numMessagesInThread):
-		msg_key = r.lindex("THREAD_MSG_MAP_" + thread_id, i)
+		msg_key = messages[i]
 		msg_id = msg_key[12:]
 		msg_author = r.lindex(msg_key, 3).decode('utf-8')
 		msg_author = 'Anonymous' if msg_author.strip() == '' else msg_author.title()
@@ -88,8 +91,8 @@ def comment_stream_source(thread_id):
 	subscriber.subscribe(subscribe_channel)
 	for msg in subscriber.listen():
 		if msg['type'] == 'message':
-			print("msg rcvd...")
-			print(msg['data'])
+#			print("msg rcvd...")
+#			print(msg['data'])
 			yield "data: %s\n\n" % msg['data']
 
 
