@@ -40,10 +40,13 @@ public class JedisMessageWriter {
 		Jedis j = getInstance().getHandle();
 		
 		// Create the object. NOTE: Objects are pushed in front. So order in list will be opposite of insertion order here
-		j.lpush("MESSAGE_OBJ_" + id, score, body, author_id, subreddit_id, parent_id, link_id);
+                if (!j.exists("MESSAGE_OBJ_" + id))
+                {
+                        j.lpush("MESSAGE_OBJ_" + id, score, body, author_id, subreddit_id, parent_id, link_id);
+                }
 
-		// Secondary index on thread_id
-		j.lpush("THREAD_MSG_MAP_" + link_id, "MESSAGE_OBJ_" + id);
+                // Secondary index on thread_id
+                j.sadd("THREAD_MSG_MAP_" + link_id, "MESSAGE_OBJ_" + id);
 
 		j.publish("THREAD_CHANNEL_" + link_id, body);
 
