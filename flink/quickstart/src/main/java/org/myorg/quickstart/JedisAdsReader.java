@@ -12,17 +12,19 @@ public class JedisAdsReader {
 	private JedisAdsReader() { }
 
         public synchronized static JedisAdsReader getInstance() {
-                if (jedis_handle == null) {
-                        jedis_handle = new JedisAdsReader();
-			JedisPoolConfig poolConfig = new JedisPoolConfig();
-			poolConfig.setMaxTotal(1024);
-			jedis_pool = new JedisPool(poolConfig, "10.0.0.4");
+
+            if (jedis_handle == null) {
+                jedis_handle = new JedisAdsReader();
+				JedisPoolConfig poolConfig = new JedisPoolConfig();
+				poolConfig.setMaxTotal(1024);
+				jedis_pool = new JedisPool(poolConfig, "10.0.0.4");
 			
-			if (jedis_pool == null) {
-				System.out.println("Failed to initialize jedis_pool!");
-			}
-                }
-                return jedis_handle;
+				if (jedis_pool == null) {
+					System.out.println("Failed to initialize jedis_pool!");
+				}
+            }
+
+            return jedis_handle;
         }
 
 	public static Jedis getHandle() {

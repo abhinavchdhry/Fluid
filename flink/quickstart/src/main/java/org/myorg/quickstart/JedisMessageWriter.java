@@ -19,7 +19,6 @@ public class JedisMessageWriter {
 			JedisPoolConfig poolConfig = new JedisPoolConfig();
 			poolConfig.setMaxTotal(1024);
 			jedis_pool = new JedisPool(poolConfig, "10.0.0.4");
-//			jedis = new Jedis("10.0.0.4", 6379);
 		}
 		return jedis_handle;
 	}

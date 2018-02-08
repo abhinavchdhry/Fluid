@@ -16,9 +16,9 @@ public class PublisherJedisHandle {
 	public synchronized static PublisherJedisHandle getInstance() {
 		if (jedis_handle == null) {
 			jedis_handle = new PublisherJedisHandle();
-                        JedisPoolConfig poolConfig = new JedisPoolConfig();
-                        poolConfig.setMaxTotal(1024);
-                        jedis_pool = new JedisPool(poolConfig, "10.0.0.4");
+            JedisPoolConfig poolConfig = new JedisPoolConfig();
+            poolConfig.setMaxTotal(1024);
+            jedis_pool = new JedisPool(poolConfig, "10.0.0.4");
 		}
 		return jedis_handle;
 	}

@@ -19,6 +19,17 @@ package org.myorg.quickstart;
  */
 
 import java.util.Properties;
+import info.debatty.java.stringsimilarity.Cosine;
+import java.util.ArrayList;
+import java.lang.Long;
+import java.lang.Integer;
+import java.lang.System;
+import java.io.File;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.util.Map;
+import java.util.Iterator;
+
 
 // FLink libs
 import org.apache.flink.api.java.DataSet;
@@ -48,45 +59,19 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
-
-// Cassandra driver libs
-import com.datastax.driver.core.Cluster;
-import com.datastax.driver.core.Session;
-import com.datastax.driver.core.Row;
-import com.datastax.driver.core.ResultSet;
-
-import com.datastax.driver.core.Cluster.Builder;
-
-import org.apache.flink.batch.connectors.cassandra.CassandraInputFormat;
-import org.apache.flink.streaming.connectors.cassandra.ClusterBuilder;
 import org.apache.flink.api.common.typeinfo.TypeHint;
-import org.apache.flink.api.java.typeutils.TupleTypeInfo;
-import org.apache.flink.streaming.connectors.cassandra.CassandraSink;
 
 // Redis client libs
 import redis.clients.jedis.Jedis;
 
 // Local project libs
 import org.myorg.quickstart.MessageObject;
-import org.myorg.quickstart.JedisHandle;
 import org.myorg.quickstart.PublisherJedisHandle;
 import org.myorg.quickstart.JedisMessageWriter;
 import org.myorg.quickstart.NaiveSimilarity;
 
-import info.debatty.java.stringsimilarity.Cosine;
-import java.util.ArrayList;
-import java.lang.Long;
-import java.lang.Integer;
-import java.lang.System;
-import java.io.File;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.util.Map;
-import java.util.Iterator;
 
 public class MessageStreamProcessor {
-
-//	final static String TOPICNAME = "jsontest22";
 
 	public final class JsonToMessageObjectMapper implements MapFunction<ObjectNode, MessageObject> {
 		@Override
@@ -102,47 +87,29 @@ public class MessageStreamProcessor {
 			outobj.subreddit_id = obj.has("subreddit_id") ? obj.get("subreddit_id").asText() : "";
 			outobj.body = obj.has("body") ? obj.get("body").asText() : "";
 
-			// Write messages to Redis cache and PubSub queue
+			/* Write messages to Redis cache and to the thread comments PubSub queue */
 			JedisMessageWriter.getInstance().writeMessage(outobj.id, outobj.thread_id, outobj.parent_id, outobj.subreddit_id, outobj.author_id, outobj.body, outobj.score.toString());
 
-//			return new MessageObject(id, thread_id, author_id, Integer.valueOf(score), parent_id, subreddit_id, body);
 			return outobj;
 		}
 	}
 
-/*	private static FlinkKafkaConsumer09[] getConsumerGroup(Integer numConsumers, String groupId) {
-		Properties properties = new Properties();
-		properties.setProperty("bootstrap.servers", "localhost:9092");
-		properties.setProperty("zookeeper.connect", "localhost:2181");
-		properties.setProperty("group.id", groupId);
-
-		FlinkKafkaConsumer09[] consumers = new FlinkKafkaConsumer09[numConsumers];
-		for (int i = 0; i < numConsumers; i++)
-		{
-			consumers[i] = new FlinkKafkaConsumer09<>(TOPICNAME, new JSONDeserializationSchema(), properties);
-		}
-
-		return (consumers);
-	}
-*/
-
-	final String ADS_TABLE_KEY_PREFIX = "AD_KEY_PREFIX_";
-	final String ADS_TABLE = "REDIS_ADS_TABLE";
-
-	final String THREAD_MAP_OBJ = "THREAD_MAP";
-	final String THREAD_KEY_PREFIX = "THREAD_ID_KEY_";
-	final String THREAD_VAL_PREFIX = "THREAD_VAL_KEY_";
-	final String AD_KEY_PREFIX = "AD_ID_KEY_";
-	final String SCORE_FIELD = "TOTAL_SCORE";
-	final String COUNT_FIELD = "TOTAL_COUNT";
-	final String CACHED_OBJ_PREFIX = "CACHED_OBJ_";
+	final String ADS_TABLE_KEY_PREFIX = 	"AD_KEY_PREFIX_";
+	final String ADS_TABLE = 				"REDIS_ADS_TABLE";
 
 
-//	public class MessageAdProcessorStateful extends RichMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple2<String, String>> {
+	/*
+	 * 	Core logic for stream processing implemented here.
+	 *	Responsibilities:
+	 *	1. Stores all the ads in-memory as keyed stream state, read in from Redis
+	 *	2. Takes a message object within a keyed stream (keyed on the conversation thread id)
+	 *		and calculates a match score for all ads stored in-memory in the state. 
+	 */
 	public class MessageAdProcessorStateful extends RichMapFunction<MessageObject, Tuple2<String, String>> {
 
 		private transient MapState<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>> adscorestate;
-		private final int RUNNING_WINDOW_LEN = 8;
+
+		private final int RUNNING_WINDOW_LEN = 8;		/* Length of window of last messages to consider for score computation */
 
 		@Override
 		public Tuple2<String, String> map(MessageObject in) throws Exception {
@@ -155,7 +122,7 @@ public class MessageStreamProcessor {
 
 			Iterator<Map.Entry<String, Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>>> it = adscorestate.iterator();
 
-			// If the map has no ads loaded, load it now
+			/* If ads are not loaded into memory yet, load them now from Redis */
 			if (!it.hasNext()) {
 
 				Jedis jedisAds = JedisAdsReader.getInstance().getHandle();	// Read ads from this 
@@ -179,7 +146,7 @@ public class MessageStreamProcessor {
 							String ad_tags = jedisAds.lindex(ad_obj_key, new Integer(2).longValue());
 
 							Tuple3<String, String, String> ad_data = new Tuple3<>(ad_title, ad_body, ad_tags);
-//							Tuple2<Double, Long> ad_meta = new Tuple2<>(new Double(0), new Long(0));
+
 							ArrayList<Double> windowedScores = new ArrayList<Double>(RUNNING_WINDOW_LEN);
 							for (int j = 0; j < RUNNING_WINDOW_LEN; j++) {
 								windowedScores.add(new Double(0));
@@ -211,10 +178,6 @@ public class MessageStreamProcessor {
 				String ad_tags = ad_data.f0.f2;
 
 				ArrayList<Double> prevScores = ad_data.f1;
-//				Double totalWindowedScore = ad_data.f2;
-
-//				Cosine cosine = new Cosine(1);
-//				Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, msg_text);
 				
 				NaiveSimilarity ns = new NaiveSimilarity();
 				Double similarity = ns.computeSimilarity(ad_body, msg_text);
@@ -222,19 +185,12 @@ public class MessageStreamProcessor {
 				prevScores.add(similarity);
 				Double evicted = prevScores.remove(0);
 
-//				totalWindowedScore = totalWindowedScore + similarity - evicted;
-				// Calculate new score based on an exponential policy
 				Double totalWindowedScore = new Double(0);
 
 				for (Integer i = 1; i <= RUNNING_WINDOW_LEN; i++) {
 					totalWindowedScore += i.doubleValue() * prevScores.get(i.intValue()-1);
 				}
 
-//				Double newScore = prevScore + similarity;
-//				count = count + 1;
-
-
-//				Double total = newScore/count.doubleValue();
 
 				if (totalWindowedScore > best_score) {
 					best_score = totalWindowedScore;
@@ -259,180 +215,18 @@ public class MessageStreamProcessor {
                     		TypeInformation.of(new TypeHint<String>() {}),
                     		TypeInformation.of(new TypeHint<Tuple3<Tuple3<String, String, String>, ArrayList<Double>, Double>>() {}) ); // type information
     			adscorestate = getRuntimeContext().getMapState(descriptor);
-
-    			// Load ads data
-
 		}
 
 	}
 
-	/*	
-		Output tuples have format:
-		1	Comment ID
-		2	Thread ID
-		3	Comment Body
-		4	Ad ID
-		5	Ad title
-		6	Ad body
-		7	Ad tags
-	*/
-	public class MessageAdProcessor extends RichMapFunction<Tuple7<String, String, String, String, String, String, String>, Tuple2<String, String>> {
-
-		private transient Long exectime = 0L;
-
-		@Override
-		public void open(Configuration config) {
-			getRuntimeContext()
-			.getMetricGroup()
-			.gauge("ExecutionTimeMetric", 
-				new Gauge<Long>() {
-					@Override
-					public Long getValue() {
-						return exectime;
-					}
-				}
-			);
-		}
-
-		@Override
-		public Tuple2<String, String> map(Tuple7<String, String, String, String, String, String, String> in) throws Exception {
-
-			Jedis jedis = JedisHandle.getInstance().getHandle();		// Write state and cached data to this instance
-			Jedis jedisAds = JedisAdsReader.getInstance().getHandle();	// Read ads from this handle
-	
-			Double highest_score = new Double(-1);
-			String best_ad_id = "";
-
-			long start = System.nanoTime();
-
-			if (jedisAds.exists(ADS_TABLE)) {
-				Long len = jedisAds.llen(ADS_TABLE);
-
-				// Loop
-				for (Long i = new Long(0); i < len; i++) {
-					String ad_obj_key = jedisAds.lindex(ADS_TABLE, i.longValue());
-
-					if (!ad_obj_key.startsWith(ADS_TABLE_KEY_PREFIX)) {
-						System.out.println("AD object prefix is not valid!!!");
-					}
-
-					String ad_id = ad_obj_key.substring(ADS_TABLE_KEY_PREFIX.length());
-
-					if (jedisAds.exists(ad_obj_key) && jedisAds.llen(ad_obj_key) == new Integer(3).longValue()) {
-						String ad_title = jedisAds.lindex(ad_obj_key, new Integer(0).longValue());
-						String ad_body = jedisAds.lindex(ad_obj_key, new Integer(1).longValue());
-						String ad_tags = jedisAds.lindex(ad_obj_key, new Integer(2).longValue());
-
-						String comment_id = in.f0;
-						String comment_thread_id = in.f1;
-						String comment_text = in.f2;
-
-						Cosine cosine = new Cosine(1);
-						Double similarity = cosine.similarity(ad_title + ad_body + ad_tags, comment_text);
-						Double overall_ad_similarity = similarity;
-
-						// Retrieve context and push updated context to Jedis
-						if (jedis.exists(THREAD_MAP_OBJ) && jedis.hexists(THREAD_MAP_OBJ, THREAD_KEY_PREFIX + comment_thread_id)) {
-
-							String cur_thread_map = jedis.hget(THREAD_MAP_OBJ, THREAD_KEY_PREFIX + comment_thread_id);
-
-							if (jedis.exists(cur_thread_map)) {
-								if (jedis.hexists(cur_thread_map, AD_KEY_PREFIX + ad_id)) {
-									String thread_ad_mapped_obj = jedis.hget(cur_thread_map, AD_KEY_PREFIX + ad_id);
-
-									if (jedis.exists(thread_ad_mapped_obj)) {
-										if (jedis.hexists(thread_ad_mapped_obj, SCORE_FIELD) && jedis.hexists(thread_ad_mapped_obj, COUNT_FIELD)) {
-											Double score = Double.parseDouble(jedis.hget(thread_ad_mapped_obj, SCORE_FIELD));
-											Integer count = Integer.parseInt(jedis.hget(thread_ad_mapped_obj, COUNT_FIELD));
-
-											count += 1;
-											score += similarity;
-
-											overall_ad_similarity = score/count.doubleValue();
-
-											jedis.hset(thread_ad_mapped_obj, SCORE_FIELD, score.toString());
-											jedis.hset(thread_ad_mapped_obj, COUNT_FIELD, count.toString());
-										}
-										else {
-											System.out.println("JEDIS_OBJECT_CORRUPT1: Corrupt thread_ad_mapped_obj: either total_score or count field missing!");
-										}
-									}
-									else {
-										System.out.println("JEDIS_OBJECT_NOT_FOUND2: thread_ad_mapped_obj not found!");
-									}
-								}
-								else {	// Current thread does not contain ad_id. Make an entry
-									// Create the thread-ad map object
-						                        String object_name = CACHED_OBJ_PREFIX + comment_thread_id + "_" + ad_id;
-
-							                jedis.hset(object_name, SCORE_FIELD, similarity.toString());
-								        jedis.hset(object_name, COUNT_FIELD, "1");
-						
-									// Insert the thread_map object
-									jedis.hset(cur_thread_map, AD_KEY_PREFIX + ad_id, object_name);
-								}
-						        }
-						        else {	// Non null ID present but object does not exist!!
-								System.out.println("JEDIS_OBJECT_NOT_FOUND1: THREAD_MAP referenced a non-null object but the object was not found!");
-						        }
-						}
-						else {	// Create a THREAD_MAP, if exists also create the thread id map
-				
-							// Create the thread-ad map object
-							String object_name = CACHED_OBJ_PREFIX + comment_thread_id + "_" + ad_id;
-
-							jedis.hset(object_name, SCORE_FIELD, similarity.toString());
-							jedis.hset(object_name, COUNT_FIELD, "1");
-
-							// Create the thread map object
-							String thread_map_object = THREAD_VAL_PREFIX + comment_thread_id;
-	
-							jedis.hset(thread_map_object, AD_KEY_PREFIX + ad_id, object_name);
-
-							// Create the final THREAD_MAP hashmap
-							jedis.hset(THREAD_MAP_OBJ, THREAD_KEY_PREFIX + comment_thread_id, thread_map_object);
-						}
-
-						if (overall_ad_similarity > highest_score) {
-							highest_score = overall_ad_similarity;
-							best_ad_id = ad_id;
-						}
-
-					}
-					else {
-						System.out.println("Ad Object referenced does not exist or is not of appropriate length!!");
-					}
-				}
-			}
-			else {
-				System.out.println("REDIS_ADS_TABLE not found!!");
-			}
-
-			long end = System.nanoTime();
-			exectime = (end - start)/1000000;
-
-			return new Tuple2<String, String>(in.f1, best_ad_id);
-		}
-	}
-
-	public class MessageToDummyTuple7Map implements MapFunction<MessageObject, Tuple7<String, String, String, String, String, String, String>> {
-		@Override
-		public Tuple7<String, String, String, String, String, String, String> map(MessageObject obj) {
-			return new Tuple7<>(obj.id, obj.thread_id, obj.body, "", "", "", "");
-		}
-	}
-
-//	final String OUTPUT_CHANNEL_PREFIX = "AD_CHANNEL_";
-
+	/*
+	 *	Publishes the ad match recommendations generated per conversation thread, into the match queue for that thread
+	 */
 	public class OutputToRedisPublisherMap implements MapFunction<Tuple2<String, String>, Tuple2<String, String>> {
 		@Override
 		public Tuple2<String, String> map(Tuple2<String, String> in) {
-//			Jedis jedis = PublisherJedisHandle.getInstance().getHandle();
 
 			PublisherJedisHandle.getInstance().publishMatch(in.f0, in.f1);
-
-//			String jsonString = new String(in.f1);
-//			jedis.publish(OUTPUT_CHANNEL_PREFIX + in.f0, jsonString);
 
 			return in;
 		}
@@ -442,26 +236,35 @@ public class MessageStreamProcessor {
 		new MessageStreamProcessor().start();
 	}
 
+	final String KAFKA_TOPICNAME_FILE = "/home/ubuntu/Fluid/kafka/kafkatopicname";
+
 	public void start() throws Exception {
 		// set up the execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-		File f = new File("/home/ubuntu/Fluid/kafka/kafkatopicname");
+		File f = new File(KAFKA_TOPICNAME_FILE);
+		if (!f.exists()) {
+			System.out.println("Kafka topicname file does not exist!");
+			System.exit(1);
+		}
+
 		FileReader fileReader = new FileReader(f);
 		BufferedReader bufferedReader = new BufferedReader(fileReader);
 		String TOPICNAME = bufferedReader.readLine().trim();
 		System.out.println("TOPICNAME is: " + TOPICNAME);
 
-                Properties properties = new Properties();
-                properties.setProperty("bootstrap.servers", "10.0.0.10:9092,10.0.0.5:9092,10.0.0.11:9092");
-                properties.setProperty("group.id", "consumergroup4");
+        Properties properties = new Properties();
+        properties.setProperty("bootstrap.servers", "10.0.0.10:9092,10.0.0.5:9092,10.0.0.11:9092");
+        properties.setProperty("group.id", "consumergroup4");
 
 		DataStream<ObjectNode> stream = env.addSource(new FlinkKafkaConsumer09<>(TOPICNAME, new JSONDeserializationSchema(), properties));
 
 		stream.map(new JsonToMessageObjectMapper())
+
 			.keyBy("thread_id")
-//			.map(new MessageToDummyTuple7Map());
+
 			.map(new MessageAdProcessorStateful())
+
 			.map(new OutputToRedisPublisherMap());
 
 		env.execute("Stream processor");
