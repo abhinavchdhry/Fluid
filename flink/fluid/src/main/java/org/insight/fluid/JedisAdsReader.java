@@ -1,4 +1,4 @@
-package org.myorg.quickstart;
+package org.insight.fluid;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;

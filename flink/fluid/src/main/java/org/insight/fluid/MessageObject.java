@@ -1,4 +1,4 @@
-package org.myorg.quickstart;
+package org.insight.fluid;
 
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.DataSet;

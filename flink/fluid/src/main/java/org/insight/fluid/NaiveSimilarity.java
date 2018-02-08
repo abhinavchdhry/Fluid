@@ -1,4 +1,4 @@
-package org.myorg.quickstart;
+package org.insight.fluid;
 
 import java.util.ArrayList;
 import java.util.List;
