@@ -47,10 +47,10 @@ import org.apache.flink.api.common.typeinfo.TypeHint;
 import redis.clients.jedis.Jedis;
 
 // Local project libs
-import org.myorg.quickstart.MessageObject;
-import org.myorg.quickstart.PublisherJedisHandle;
-import org.myorg.quickstart.JedisMessageWriter;
-import org.myorg.quickstart.NaiveSimilarity;
+import org.insight.fluid.MessageObject;
+import org.insight.fluid.PublisherJedisHandle;
+import org.insight.fluid.JedisMessageWriter;
+import org.insight.fluid.NaiveSimilarity;
 
 
 public class MessageStreamProcessor {
